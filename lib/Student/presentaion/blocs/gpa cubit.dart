@@ -61,11 +61,23 @@ class GpaCubit extends Cubit<GpaState> {
   }
 
   Future<void> _recalculateSemester(int semesterId) async {
-    final courseMaps = await LocalDb.getCoursesBySemesterId(semesterId);
-    final courses = courseMaps.map((m) => Course.fromMap(m)).toList();
+    final existingSem = await LocalDb.getSemesterById(semesterId);
+    if (existingSem == null) return;
+
+    final courses = existingSem.courses;
     final gpa = calculateSemesterGpa(courses);
     final totalCredits = courses.fold<int>(0, (a, b) => a + b.credits);
-    final sem = Semester(id: semesterId, title: '', gpa: gpa, rank: 0, totalCredits: totalCredits);
-    await LocalDb.updateSemester(sem);
+
+    final updatedSem = Semester(
+        id: semesterId,
+        title: existingSem.title,   // ✅ keep the title
+        rank: existingSem.rank,     // ✅ keep the rank
+        gpa: gpa,
+        totalCredits: totalCredits,
+        courses: courses
+    );
+
+    await LocalDb.updateSemester(updatedSem);
   }
+
 }

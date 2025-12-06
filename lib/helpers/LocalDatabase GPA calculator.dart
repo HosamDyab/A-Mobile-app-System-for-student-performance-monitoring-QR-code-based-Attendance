@@ -97,4 +97,16 @@ class LocalDb {
     }
     return list;
   }
+
+  static Future<Semester?> getSemesterById(int id) async {
+    final database = await db;
+    final maps = await database.query('semesters', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+
+    final semMap = maps.first;
+    final courseMaps = await getCoursesBySemesterId(id);
+    final courses = courseMaps.map((c) => Course.fromMap(c)).toList();
+    return Semester.fromMap(semMap, courses);
+  }
+
 }

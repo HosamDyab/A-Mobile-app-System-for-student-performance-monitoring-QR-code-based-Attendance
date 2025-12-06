@@ -390,7 +390,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
                 ),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: semesters.asMap().entries.map((entry) {
+                    spots: semesters.reversed.toList().asMap().entries.map((entry) {
                       return FlSpot(entry.key.toDouble(), entry.value.gpa);
                     }).toList(),
                     isCurved: true,
@@ -476,30 +476,35 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
                       Expanded(
                         child: Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.calendar_today_rounded,
-                                  color: Colors.white, size: 20),
-                            ),
-                            const SizedBox(width: 12),
+                            // Container(
+                            //   padding: const EdgeInsets.all(10),
+                            //   decoration: BoxDecoration(
+                            //     gradient: AppColors.primaryGradient,
+                            //     borderRadius: BorderRadius.circular(12),
+                            //   ),
+                            //   child: const Icon(Icons.calendar_today_rounded,
+                            //       color: Colors.white, size: 20),
+                            // ),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 s.title,
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
+                                  fontSize: 13
                                 ),
+                                maxLines: 2,           // allow up to 2 lines
+                                overflow: TextOverflow.ellipsis, // show ... if still too long
+                                softWrap: true,        // allow wrapping
                               ),
                             ),
+
                           ],
                         ),
                       ),
                       Row(
                         children: [
-                          Container(
+                         Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(
