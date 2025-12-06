@@ -12,7 +12,10 @@ import '../../../shared/widgets/animated_gradient_background.dart';
 import '../../../shared/widgets/hover_scale_widget.dart';
 import '../../../shared/widgets/loading_animation.dart';
 import '../../../shared/widgets/logout_button.dart';
+import '../../../shared/widgets/theme_toggle_button.dart';
 
+/// Screen that allows the student to manage semesters/courses
+/// and visualises GPA progress with a chart and summary cards.
 class GpaCalcPage extends StatefulWidget {
   const GpaCalcPage({super.key});
 
@@ -69,6 +72,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
             ],
           ),
           actions: [
+            const ThemeToggleButton(),
             LogoutButton(showAsIcon: true),
           ],
         ),
@@ -277,6 +281,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Line chart that shows GPA trend over semesters.
   Widget _buildGpaChart(BuildContext context, List<Semester> semesters) {
     final theme = Theme.of(context);
     return Container(
@@ -426,6 +431,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Card that displays a single semester with its GPA and all courses.
   Widget _semesterCard(BuildContext context, Semester s) {
     final theme = Theme.of(context);
     final gpaColor = s.gpa >= 3.5
@@ -612,6 +618,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Row representing a single course inside a semester card.
   Widget _courseRow(BuildContext context, Course c) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -650,6 +657,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Dialog to create a new semester record.
   Future<void> _showAddSemesterDialog() async {
     final titleCtrl = TextEditingController();
     final rankCtrl = TextEditingController();
@@ -687,6 +695,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Dialog to edit an existing semester (title and rank only).
   Future<void> _showEditSemesterDialog(Semester s) async {
     final titleCtrl = TextEditingController(text: s.title);
     final rankCtrl = TextEditingController(text: s.rank.toString());
@@ -731,6 +740,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Confirmation dialog before deleting a semester and all its courses.
   Future<void> _confirmDeleteSemester(Semester s) async {
     final yes = await showDialog<bool>(
       context: context,
@@ -753,6 +763,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     }
   }
 
+  /// Dialog to add a new course to the provided semester.
   Future<void> _showAddCourseDialog(Semester s) async {
     final nameCtrl = TextEditingController();
     final creditsCtrl = TextEditingController();
@@ -811,6 +822,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Dialog to edit an existing course (name, credits, grade).
   Future<void> _showEditCourseDialog(Course c) async {
     final nameCtrl = TextEditingController(text: c.name);
     final creditsCtrl = TextEditingController(text: c.credits.toString());
@@ -875,6 +887,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
     );
   }
 
+  /// Confirmation dialog before removing a single course from a semester.
   Future<void> _confirmDeleteCourse(Course c) async {
     final yes = await showDialog<bool>(
       context: context,
@@ -897,6 +910,7 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
   }
 }
 
+/// Small read‑only input-like box used inside the GPA tables.
 Widget _inputBox({
   required String initialValue,
   VoidCallback? onTap,

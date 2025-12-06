@@ -14,6 +14,7 @@ import '../../../shared/utils/app_colors.dart';
 import '../../../shared/widgets/loading_animation.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared/utils/student_utils.dart';
+import '../../../shared/widgets/theme_toggle_button.dart';
 import 'StudentSearchPage.dart';
 import 'faculty_search_page.dart';
 import '../../../shared/utils/page_transitions.dart';
@@ -217,6 +218,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ],
                 ),
                 actions: [
+                  const ThemeToggleButton(),
                   IconButton(
                     icon: Container(
                       padding: const EdgeInsets.all(8),
@@ -337,101 +339,101 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const SizedBox(height: 20),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Transform.scale(
-                scale: 0.9 + (0.1 * value),
-                child: Opacity(
-                  opacity: value,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withOpacity(0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      style: theme.textTheme.bodyLarge,
-                      decoration: InputDecoration(
-                        hintText: "Search courses, faculty, or anything...",
-                        hintStyle: TextStyle(
-                          color: AppColors.tertiaryLightGray.withOpacity(0.7),
-                        ),
-                        prefixIcon: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              bottomLeft: Radius.circular(20),
-                            ),
-                          ),
-                          child: const Icon(Icons.search_rounded,
-                              color: Colors.white, size: 24),
-                        ),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentRed.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(Icons.clear_rounded,
-                                      color: AppColors.accentRed, size: 18),
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {});
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(
-                            color: AppColors.primaryBlue.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(
-                            color: AppColors.primaryBlue.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(
-                            color: AppColors.primaryBlue,
-                            width: 3,
-                          ),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 18,
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {});
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          // TweenAnimationBuilder<double>(
+          //   tween: Tween(begin: 0.0, end: 1.0),
+          //   duration: const Duration(milliseconds: 500),
+          //   curve: Curves.easeOutCubic,
+          //   builder: (context, value, child) {
+          //     return Transform.scale(
+          //       scale: 0.9 + (0.1 * value),
+          //       child: Opacity(
+          //         opacity: value,
+          //         child: Container(
+          //           decoration: BoxDecoration(
+          //             borderRadius: BorderRadius.circular(20),
+          //             boxShadow: [
+          //               BoxShadow(
+          //                 color: AppColors.primaryBlue.withOpacity(0.2),
+          //                 blurRadius: 15,
+          //                 offset: const Offset(0, 5),
+          //               ),
+          //             ],
+          //           ),
+          //           child: TextField(
+          //             controller: _searchController,
+          //             autofocus: true,
+          //             style: theme.textTheme.bodyLarge,
+          //             decoration: InputDecoration(
+          //               hintText: "Search courses, faculty, or anything...",
+          //               hintStyle: TextStyle(
+          //                 color: AppColors.tertiaryLightGray.withOpacity(0.7),
+          //               ),
+          //               prefixIcon: Container(
+          //                 padding: const EdgeInsets.all(14),
+          //                 decoration: BoxDecoration(
+          //                   gradient: AppColors.primaryGradient,
+          //                   borderRadius: const BorderRadius.only(
+          //                     topLeft: Radius.circular(20),
+          //                     bottomLeft: Radius.circular(20),
+          //                   ),
+          //                 ),
+          //                 child: const Icon(Icons.search_rounded,
+          //                     color: Colors.white, size: 24),
+          //               ),
+          //               suffixIcon: _searchController.text.isNotEmpty
+          //                   ? IconButton(
+          //                       icon: Container(
+          //                         padding: const EdgeInsets.all(8),
+          //                         decoration: BoxDecoration(
+          //                           color: AppColors.accentRed.withOpacity(0.1),
+          //                           shape: BoxShape.circle,
+          //                         ),
+          //                         child: Icon(Icons.clear_rounded,
+          //                             color: AppColors.accentRed, size: 18),
+          //                       ),
+          //                       onPressed: () {
+          //                         _searchController.clear();
+          //                         setState(() {});
+          //                       },
+          //                     )
+          //                   : null,
+          //               border: OutlineInputBorder(
+          //                 borderRadius: BorderRadius.circular(20),
+          //                 borderSide: BorderSide(
+          //                   color: AppColors.primaryBlue.withOpacity(0.3),
+          //                   width: 2,
+          //                 ),
+          //               ),
+          //               enabledBorder: OutlineInputBorder(
+          //                 borderRadius: BorderRadius.circular(20),
+          //                 borderSide: BorderSide(
+          //                   color: AppColors.primaryBlue.withOpacity(0.3),
+          //                   width: 2,
+          //                 ),
+          //               ),
+          //               focusedBorder: OutlineInputBorder(
+          //                 borderRadius: BorderRadius.circular(20),
+          //                 borderSide: BorderSide(
+          //                   color: AppColors.primaryBlue,
+          //                   width: 3,
+          //                 ),
+          //               ),
+          //               filled: true,
+          //               fillColor: Colors.white,
+          //               contentPadding: const EdgeInsets.symmetric(
+          //                 horizontal: 20,
+          //                 vertical: 18,
+          //               ),
+          //             ),
+          //             onChanged: (value) {
+          //               setState(() {});
+          //             },
+          //           ),
+          //         ),
+          //       ),
+          //     );
+          //   },
+          // ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../blocs/SearchCuit.dart';
-import '../../../shared/widgets/animated_gradient_background.dart';
+import 'faculty_details_page.dart';
 import '../../../shared/utils/app_colors.dart';
+import '../../../shared/utils/page_transitions.dart';
+import '../../../shared/widgets/animated_gradient_background.dart';
 import '../../../shared/widgets/hover_scale_widget.dart';
 import '../../../shared/widgets/loading_animation.dart';
 
@@ -22,18 +24,16 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onChanged);
+    _controller.addListener(_onSearchChanged);
+    // جلب كل الأساتذة فور فتح الصفحة
+    context.read<StudentSearchCubit>().loadAllFaculty();
   }
 
-  void _onChanged() {
+  void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
+    _debounce = Timer(const Duration(milliseconds: 300), () {
       final query = _controller.text.trim();
-      if (query.isEmpty) {
-        context.read<StudentSearchCubit>().clearFaculty();
-        return;
-      }
-      context.read<StudentSearchCubit>().searchFaculty(query);
+      context.read<StudentSearchCubit>().filterFaculty(query);
     });
   }
 
@@ -50,11 +50,12 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: colorScheme.onSurface),
+          icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
@@ -63,88 +64,80 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: AppColors.secondaryGradient,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.person_search_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
+              child: const Icon(Icons.person_search_rounded,
+                  color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
             Text(
-              "Search Faculty",
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              "My Faculty",
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
           ],
         ),
       ),
       body: AnimatedGradientBackground(
-        colors: AppColors.animatedGradientColors,
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
+                // Search Field
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(milliseconds: 500),
+                  duration: const Duration(milliseconds: 600),
                   curve: Curves.easeOutCubic,
                   builder: (context, value, child) {
                     return Transform.scale(
-                      scale: 0.9 + (0.1 * value),
+                      scale: 0.8 + (0.2 * value),
                       child: Opacity(
                         opacity: value,
-                        child: TextField(
-                          controller: _controller,
-                          cursorColor: AppColors.primaryBlue,
-                          style: theme.textTheme.bodyLarge,
-                          decoration: InputDecoration(
-                            hintText: "Search faculty by name...",
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixIcon: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(16),
-                                  bottomLeft: Radius.circular(16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withOpacity(0.1),
+                                blurRadius: 15,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _controller,
+                            decoration: InputDecoration(
+                              hintText: "Search faculty by name...",
+                              prefixIcon: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(20),
+                                    bottomLeft: Radius.circular(20),
+                                  ),
                                 ),
+                                child: const Icon(Icons.search_rounded,
+                                    color: Colors.white, size: 22),
                               ),
-                              child: const Icon(
-                                Icons.search_rounded,
-                                color: Colors.white,
-                                size: 24,
+                              suffixIcon: _controller.text.isNotEmpty
+                                  ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _controller.clear();
+                                  context.read<StudentSearchCubit>().filterFaculty('');
+                                },
+                              )
+                                  : null,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide.none,
                               ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
-                                color: AppColors.primaryBlue.withOpacity(0.3),
-                                width: 2,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
-                                color: AppColors.primaryBlue.withOpacity(0.3),
-                                width: 2,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
-                                color: AppColors.primaryBlue,
-                                width: 2.5,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 18,
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                             ),
                           ),
                         ),
@@ -152,209 +145,133 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
+
                 Expanded(
                   child: BlocBuilder<StudentSearchCubit, StudentSearchState>(
                     builder: (context, state) {
-                      if (_controller.text.isEmpty) {
+                      if (state.isLoadingFaculty && state.faculty.isEmpty) {
+                        return const Center(
+                          child: LoadingAnimation(color: AppColors.primaryBlue, size: 60),
+                        );
+                      }
+
+                      if (state.faculty.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primaryBlue.withOpacity(0.3),
-                                      blurRadius: 20,
-                                      spreadRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.search_rounded,
-                                  color: Colors.white,
-                                  size: 48,
-                                ),
-                              ),
+                              Icon(Icons.person_off_rounded,
+                                  size: 80, color: colorScheme.onSurface.withOpacity(0.3)),
                               const SizedBox(height: 24),
                               Text(
-                                "Start typing to search faculty...",
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: AppColors.tertiaryLightGray,
-                                  fontWeight: FontWeight.w600,
+                                _controller.text.isEmpty
+                                    ? "No faculty members found"
+                                    : "No match for \"${_controller.text}\"",
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  color: colorScheme.onSurface.withOpacity(0.6),
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ],
                           ),
                         );
                       }
 
-                      if (!state.isLoadingFaculty && state.faculty.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.person_off_rounded,
-                                size: 64,
-                                color: AppColors.tertiaryLightGray,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                "No matching faculty found",
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: AppColors.tertiaryLightGray,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return Stack(
-                        children: [
-                          ListView.separated(
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
-                            itemCount: state.faculty.length,
-                            itemBuilder: (context, index) {
-                              final faculty = state.faculty[index];
-                              final initial = faculty.fullName.isNotEmpty
-                                  ? faculty.fullName[0].toUpperCase()
-                                  : '?';
-
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0.0, end: 1.0),
-                                duration: Duration(milliseconds: 300 + (index * 50)),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, value, child) {
-                                  return Transform.translate(
-                                    offset: Offset(0, 20 * (1 - value)),
-                                    child: Opacity(
-                                      opacity: value,
-                                      child: HoverScaleWidget(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                Colors.white,
-                                                AppColors.secondaryOrange.withOpacity(0.05),
-                                              ],
-                                            ),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: AppColors.secondaryOrange.withOpacity(0.2),
-                                              width: 1.5,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: AppColors.secondaryOrange.withOpacity(0.1),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 4),
-                                                spreadRadius: 1,
-                                              ),
-                                            ],
+                      return ListView.builder(
+                        itemCount: state.faculty.length,
+                        itemBuilder: (context, index) {
+                          final faculty = state.faculty[index];
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: Duration(milliseconds: 350 + (index * 70)),
+                            builder: (context, value, child) {
+                              return Transform.translate(
+                                offset: Offset(0, 30 * (1 - value)),
+                                child: Opacity(
+                                  opacity: value,
+                                  child: HoverScaleWidget(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        AdvancedSlidePageRoute(
+                                          page: FacultyDetailsPage(faculty: faculty),
+                                          direction: SlideDirection.right,
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: AppColors.primaryBlue.withOpacity(0.1),
+                                          width: 1.5,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primaryBlue.withOpacity(0.1),
+                                            blurRadius: 15,
+                                            offset: const Offset(0, 5),
                                           ),
-                                          child: ExpansionTile(
-                                            leading: Container(
-                                              padding: const EdgeInsets.all(4),
-                                              decoration: BoxDecoration(
-                                                gradient: AppColors.secondaryGradient,
-                                                shape: BoxShape.circle,
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: AppColors.secondaryOrange.withOpacity(0.3),
-                                                    blurRadius: 8,
-                                                    spreadRadius: 2,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: CircleAvatar(
-                                                backgroundColor: Colors.white,
-                                                radius: 20,
-                                                child: Text(
-                                                  initial,
-                                                  style: TextStyle(
-                                                    color: AppColors.secondaryOrange,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 18,
-                                                  ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 60,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                              gradient: AppColors.secondaryGradient,
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                faculty.fullName.isNotEmpty
+                                                    ? faculty.fullName[0].toUpperCase()
+                                                    : "?",
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 28,
+                                                  fontWeight: FontWeight.bold,
                                                 ),
                                               ),
                                             ),
-                                            title: Text(
-                                              faculty.fullName,
-                                              style: theme.textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.tertiaryBlack,
-                                              ),
-                                            ),
-                                            subtitle: Padding(
-                                              padding: const EdgeInsets.only(top: 4),
-                                              child: Row(
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  Icon(
-                                                    Icons.email_rounded,
-                                                    size: 14,
-                                                    color: AppColors.tertiaryLightGray,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Expanded(
-                                                    child: Text(
-                                                      faculty.email,
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: AppColors.tertiaryLightGray,
-                                                      ),
-                                                      overflow: TextOverflow.ellipsis,
+                                                  Text(
+                                                    faculty.fullName,
+                                                    style: theme.textTheme.titleMedium?.copyWith(
+                                                      fontWeight: FontWeight.w700,
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                            ),
-                                            iconColor: AppColors.secondaryOrange,
-                                            collapsedIconColor: AppColors.secondaryOrange,
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    faculty.email,
+                                                    style: theme.textTheme.bodySmall?.copyWith(
+                                                      color: colorScheme.onSurface.withOpacity(0.7),
+                                                    ),
+                                                  ),
+                                                ]),
+
                                           ),
-                                        ),
+                                          Icon(Icons.arrow_forward_ios_rounded,
+                                              size: 18, color: AppColors.primaryBlue.withOpacity(0.6)),
+                                        ],
                                       ),
                                     ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                          if (state.isLoadingFaculty)
-                            Positioned(
-                              bottom: 20,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primaryBlue.withOpacity(0.2),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: LoadingAnimation(
-                                    size: 32,
-                                    color: AppColors.primaryBlue,
                                   ),
                                 ),
-                              ),
-                            ),
-                        ],
+                              );
+                            },
+                          );
+                        },
                       );
                     },
                   ),

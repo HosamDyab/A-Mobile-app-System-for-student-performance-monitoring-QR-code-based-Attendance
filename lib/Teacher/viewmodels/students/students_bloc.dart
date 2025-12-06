@@ -18,7 +18,10 @@ class StudentsBloc extends Bloc<StudentsEvent, StudentsState> {
   ) async {
     emit(StudentsLoading());
     try {
-      final List<StudentEntity> students = await getStudentsUseCase.execute();
+      final List<StudentEntity> students = await getStudentsUseCase.execute(
+        facultyId: event.facultyId,
+        role: event.role,
+      );
       emit(StudentsLoaded(students: students));
     } catch (e) {
       emit(StudentsError(message: e.toString()));
@@ -31,7 +34,10 @@ class StudentsBloc extends Bloc<StudentsEvent, StudentsState> {
 ) async {
   emit(StudentsLoading());
   try {
-    final List<StudentEntity> students = await getStudentsUseCase.execute();
+    final List<StudentEntity> students = await getStudentsUseCase.execute(
+      facultyId: event.facultyId,
+      role: event.role,
+    );
     final filtered = students.where((student) => 
       student.studentId.toLowerCase().contains(event.query.toLowerCase()) ||
       student.studentCode.toLowerCase().contains(event.query.toLowerCase()) ||
@@ -51,6 +57,8 @@ class StudentsBloc extends Bloc<StudentsEvent, StudentsState> {
       final List<StudentEntity> students = await getStudentsUseCase.execute(
         level: event.level,
         status: event.status,
+        facultyId: event.facultyId,
+        role: event.role,
       );
       emit(StudentsLoaded(students: students));
     } catch (e) {
@@ -61,17 +69,26 @@ class StudentsBloc extends Bloc<StudentsEvent, StudentsState> {
 
 abstract class StudentsEvent {}
 
-class LoadStudentsEvent extends StudentsEvent {}
+class LoadStudentsEvent extends StudentsEvent {
+  final String? facultyId;
+  final String? role;
+  
+  LoadStudentsEvent({this.facultyId, this.role});
+}
 
 class SearchStudentsEvent extends StudentsEvent {
   final String query;
+  final String? facultyId;
+  final String? role;
   
-  SearchStudentsEvent(this.query);
+  SearchStudentsEvent(this.query, {this.facultyId, this.role});
 }
 
 class FilterStudentsEvent extends StudentsEvent {
   final String? level;
   final String? status;
+  final String? facultyId;
+  final String? role;
   
-  FilterStudentsEvent({this.level, this.status});
+  FilterStudentsEvent({this.level, this.status, this.facultyId, this.role});
 }

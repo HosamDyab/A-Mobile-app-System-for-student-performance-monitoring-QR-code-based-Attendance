@@ -46,16 +46,24 @@ class _ModernBottomNavBarState extends State<ModernBottomNavBar>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Container(
       height: 68,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.white,
-            Colors.white.withOpacity(0.98),
-          ],
+          colors: isDark
+              ? [
+                  theme.colorScheme.surface,
+                  theme.colorScheme.surface.withOpacity(0.98),
+                ]
+              : [
+                  Colors.white,
+                  Colors.white.withOpacity(0.98),
+                ],
         ),
         boxShadow: [
           BoxShadow(
@@ -76,6 +84,10 @@ class _ModernBottomNavBarState extends State<ModernBottomNavBar>
             final item = entry.value;
             final isSelected = index == widget.currentIndex;
 
+            final unselectedColor = isDark 
+                ? theme.colorScheme.onSurface.withOpacity(0.6)
+                : AppColors.tertiaryLightGray;
+            
             return Expanded(
               child: GestureDetector(
                 onTap: () => _handleTap(index),
@@ -107,7 +119,7 @@ class _ModernBottomNavBarState extends State<ModernBottomNavBar>
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 400),
                         curve: Curves.easeInOutCubic,
-                        padding: EdgeInsets.all(isSelected ? 9 : 7),
+                        padding: EdgeInsets.all(isSelected ? 8 : 6),
                         decoration: BoxDecoration(
                           color: isSelected
                               ? Colors.white.withOpacity(0.2)
@@ -115,39 +127,37 @@ class _ModernBottomNavBarState extends State<ModernBottomNavBar>
                           shape: BoxShape.circle,
                         ),
                         child: AnimatedScale(
-                          scale: isSelected ? 1.12 : 1.0,
+                          scale: isSelected ? 1.1 : 1.0,
                           duration: const Duration(milliseconds: 400),
                           curve: Curves.easeOutCubic,
                           child: Icon(
                             item.icon,
                             color: isSelected
                                 ? Colors.white
-                                : AppColors.tertiaryLightGray,
-                            size: isSelected ? 24 : 20,
+                                : unselectedColor,
+                            size: isSelected ? 22 : 20,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 3),
-                      Flexible(
-                        child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeInOutCubic,
-                          style: TextStyle(
-                            fontSize: isSelected ? 11 : 9,
-                            fontWeight:
-                                isSelected ? FontWeight.w800 : FontWeight.w600,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.tertiaryLightGray,
-                            height: 1.0,
-                            letterSpacing: isSelected ? 0.2 : 0.0,
-                          ),
-                          child: Text(
-                            item.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
+                      const SizedBox(height: 2),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOutCubic,
+                        style: TextStyle(
+                          fontSize: isSelected ? 10 : 9,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : unselectedColor,
+                          height: 1.0,
+                          letterSpacing: isSelected ? 0.2 : 0.0,
+                        ),
+                        child: Text(
+                          item.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       if (isSelected)
@@ -159,9 +169,9 @@ class _ModernBottomNavBarState extends State<ModernBottomNavBar>
                             return Transform.scale(
                               scale: value,
                               child: Container(
-                                margin: const EdgeInsets.only(top: 2),
-                                width: 4,
-                                height: 4,
+                                margin: const EdgeInsets.only(top: 1),
+                                width: 3,
+                                height: 3,
                                 decoration: BoxDecoration(
                                   gradient: AppColors.secondaryGradient,
                                   shape: BoxShape.circle,

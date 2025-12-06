@@ -52,7 +52,7 @@ class SupabaseRemoteDataSource {
       major: response['Major'],
       academicLevel: response['AcademicLevel'],
       semester: response['CurrentSemester'],
-      gpa: (response['CurrentGPA'] ?? 0).toDouble(),
+      gpa: (response['CumulativeGPA'] ?? 0).toDouble(),
     );
   }
 

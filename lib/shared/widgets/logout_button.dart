@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../auth/screens/welcome_screen.dart';
 import '../utils/page_transitions.dart';
-import '../utils/app_colors.dart';
 
-/// Reusable logout button widget
 class LogoutButton extends StatelessWidget {
   final bool showAsIcon;
 
@@ -12,6 +10,8 @@ class LogoutButton extends StatelessWidget {
     super.key,
     this.showAsIcon = true,
   });
+
+  static const Color mainColor = Color(0xFF2C6DF0);
 
   void _showLogoutDialog(BuildContext context) {
     final theme = Theme.of(context);
@@ -29,16 +29,19 @@ class LogoutButton extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [
-                      AppColors.accentRed,
-                      AppColors.accentRed.withOpacity(0.7)
+                      mainColor,
+                      mainColor,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.logout_rounded,
-                    color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 12),
               const Text(
@@ -59,18 +62,20 @@ class LogoutButton extends StatelessWidget {
                 style: TextStyle(color: colorScheme.onSurface),
               ),
             ),
+
+            // Logout button with gradient
             Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [
-                    AppColors.accentRed,
-                    AppColors.accentRed.withOpacity(0.7)
+                    mainColor,
+                    mainColor,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.accentRed.withOpacity(0.3),
+                    color: mainColor.withOpacity(0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -84,7 +89,7 @@ class LogoutButton extends StatelessWidget {
                     Navigator.pushAndRemoveUntil(
                       context,
                       FadePageRoute(page: const WelcomeScreen()),
-                      (route) => false,
+                          (route) => false,
                     );
                   }
                 },
@@ -112,23 +117,26 @@ class LogoutButton extends StatelessWidget {
         icon: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               colors: [
-                AppColors.accentRed,
-                AppColors.accentRed.withOpacity(0.7)
+                mainColor,
+                mainColor,
               ],
             ),
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accentRed.withOpacity(0.3),
+                color: mainColor.withOpacity(0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          child:
-              const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+          child: const Icon(
+            Icons.logout_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
         ),
         onPressed: () => _showLogoutDialog(context),
         tooltip: 'Logout',
@@ -139,7 +147,7 @@ class LogoutButton extends StatelessWidget {
         icon: const Icon(Icons.logout_rounded),
         label: const Text('Logout'),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accentRed,
+          backgroundColor: mainColor,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(

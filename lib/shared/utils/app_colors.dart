@@ -9,10 +9,13 @@ class AppColors {
   static const Color primaryBlueDark = Color(0xFF2563EB);
   static const Color primaryBlueLight = Color(0xFF60A5FA);
 
-  // Secondary Orange Gradient
-  static const Color secondaryOrange = Color(0xFFF97316); // Vibrant orange
-  static const Color secondaryOrangeDark = Color(0xFFEA580C);
-  static const Color secondaryOrangeLight = Color(0xFFFB923C);
+  // Secondary Blue Gradient (changed from orange to blue)
+  static const Color secondaryBlue = Color(0xFF0EA5E9); // Sky blue
+  static const Color secondaryBlueDark = Color(0xFF0284C7);
+  static const Color secondaryBlueLight = Color(0xFF38BDF8);
+
+  // Keep legacy orange reference for backward compatibility
+  static const Color secondaryOrange = Color(0xFF0EA5E9); // Now maps to blue
 
   // Tertiary Black/Gray
   static const Color tertiaryBlack = Color(0xFF1F2937);
@@ -40,7 +43,7 @@ class AppColors {
   static const LinearGradient secondaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [secondaryOrange, secondaryOrangeDark],
+    colors: [secondaryBlue, secondaryBlueDark],
   );
 
   static const LinearGradient accentGradient = LinearGradient(
@@ -63,4 +66,3 @@ class AppColors {
         accentCyan.withOpacity(0.1),
       ];
 }
-

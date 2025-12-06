@@ -6,8 +6,18 @@ class StudentRepository {
   
   StudentRepository(this._dataSource);
   
-  Future<List<StudentEntity>> getAllStudents({String? level, String? status}) async {
-    final models = await _dataSource.getAllStudents(level: level, status: status);
+  Future<List<StudentEntity>> getAllStudents({
+    String? level, 
+    String? status,
+    String? facultyId,
+    String? role,
+  }) async {
+    final models = await _dataSource.getAllStudents(
+      level: level, 
+      status: status,
+      facultyId: facultyId,
+      role: role,
+    );
     return models.map((model) => StudentEntity.fromModel(model)).toList();
   }
   

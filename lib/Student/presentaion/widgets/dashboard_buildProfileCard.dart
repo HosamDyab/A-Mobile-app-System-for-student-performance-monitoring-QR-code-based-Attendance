@@ -107,7 +107,7 @@ class ProfileCard extends StatelessWidget {
                             ),
                             _buildInfoChip(
                               icon: Icons.calendar_today_rounded,
-                              label: "Sem ${profile.semester}",
+                              label: "Semester ${profile.semester}",
                               color: AppColors.secondaryOrange,
                             ),
                           ],

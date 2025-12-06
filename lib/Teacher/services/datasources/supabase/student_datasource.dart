@@ -4,16 +4,27 @@ import '../../supabase_service.dart';
 
 /// Data source for student-related operations with Supabase
 class StudentDataSource {
-  Future<List<StudentModel>> getAllStudents({String? level, String? status}) async {
+  Future<List<StudentModel>> getAllStudents({
+    String? level,
+    String? status,
+    String? facultyId,
+    String? role,
+  }) async {
     try {
+      // If facultyId and role are provided, get students for that faculty/TA
+      if (facultyId != null && role != null) {
+        return await _getStudentsForFacultyOrTA(facultyId, role, level);
+      }
+
+      // Otherwise, get all students
       var query = SupabaseService.client
           .from('Student')
           .select('*, User(FullName, Email)');
-      
+
       if (level != null && level != 'All Levels') {
         query = query.eq('AcademicLevel', level);
       }
-      
+
       final response = await query;
       return (response as List<dynamic>)
           .map((e) => StudentModel.fromJson(e as Map<String, dynamic>))
@@ -23,17 +34,116 @@ class StudentDataSource {
       return [];
     }
   }
-  
+
+  /// Get students for a specific faculty member or TA
+  Future<List<StudentModel>> _getStudentsForFacultyOrTA(
+    String facultyId,
+    String role,
+    String? level,
+  ) async {
+    try {
+      List<StudentModel> students = [];
+
+      if (role == 'faculty') {
+        // For Faculty: Get students from sections linked to their lectures
+        final lecturesResponse = await SupabaseService.client
+            .from('LectureCourseOffering')
+            .select('LectureOfferingId')
+            .eq('FacultyId', facultyId);
+
+        final lectureIds = (lecturesResponse as List)
+            .map((l) => l['LectureOfferingId'])
+            .whereType<dynamic>()
+            .toList();
+
+        if (lectureIds.isNotEmpty) {
+          // Get sections for these lectures
+          final sectionsResponse = await SupabaseService.client
+              .from('SectionCourseOffering')
+              .select('SectionOfferingId')
+              .inFilter('LectureOfferingId', lectureIds);
+
+          final sectionIds = (sectionsResponse as List)
+              .map((s) => s['SectionOfferingId'])
+              .whereType<dynamic>()
+              .toList();
+
+          if (sectionIds.isNotEmpty) {
+            // Get students in these sections
+            final studentsResponse = await SupabaseService.client
+                .from('StudentSection')
+                .select('Student(*, User(FullName, Email))')
+                .inFilter('SectionOfferingId', sectionIds);
+
+            final studentSet = <String>{};
+            for (var item in studentsResponse as List) {
+              final studentData = item['Student'];
+              if (studentData != null) {
+                final studentId = studentData['StudentId']?.toString();
+                if (studentId != null && !studentSet.contains(studentId)) {
+                  studentSet.add(studentId);
+                  students.add(StudentModel.fromJson(studentData));
+                }
+              }
+            }
+          }
+        }
+      } else if (role == 'teacher_assistant') {
+        // For TA: Get students from their assigned sections
+        final sectionsResponse = await SupabaseService.client
+            .from('SectionCourseOffering')
+            .select('SectionOfferingId')
+            .eq('TAId', facultyId);
+
+        final sectionIds = (sectionsResponse as List)
+            .map((s) => s['SectionOfferingId'])
+            .whereType<dynamic>()
+            .toList();
+
+        if (sectionIds.isNotEmpty) {
+          // Get students in these sections
+          final studentsResponse = await SupabaseService.client
+              .from('StudentSection')
+              .select('Student(*, User(FullName, Email))')
+              .inFilter('SectionOfferingId', sectionIds);
+
+          final studentSet = <String>{};
+          for (var item in studentsResponse as List) {
+            final studentData = item['Student'];
+            if (studentData != null) {
+              final studentId = studentData['StudentId']?.toString();
+              if (studentId != null && !studentSet.contains(studentId)) {
+                studentSet.add(studentId);
+                students.add(StudentModel.fromJson(studentData));
+              }
+            }
+          }
+        }
+      }
+
+      // Apply level filter if specified
+      if (level != null && level != 'All Levels') {
+        students = students.where((s) => s.academicLevel == level).toList();
+      }
+
+      return students;
+    } catch (e) {
+      debugPrint('Error fetching students for $role: $e');
+      // Fallback to all students
+      return await getAllStudents(level: level);
+    }
+  }
+
   Future<StudentModel> getStudentById(String id) async {
     final response = await SupabaseService.client
         .from('Student')
-        .select()
-        .eq('student_id', id) // Use student_id instead of id
+        .select('*, User(FullName, Email)')
+        .eq('StudentId', id)
         .single();
-    
+
     return StudentModel.fromJson(response);
   }
-  
+
   Future<List<StudentModel>> searchStudents(String queryText) async {
     try {
       // Fetch all students with user info
@@ -51,7 +161,9 @@ class StudentDataSource {
         final id = student.studentId.toLowerCase();
         final code = student.studentCode.toLowerCase();
         final name = (student.fullName ?? '').toLowerCase();
-        return id.contains(query) || code.contains(query) || name.contains(query);
+        return id.contains(query) ||
+            code.contains(query) ||
+            name.contains(query);
       }).toList();
     } catch (e) {
       debugPrint('Error searching students: $e');

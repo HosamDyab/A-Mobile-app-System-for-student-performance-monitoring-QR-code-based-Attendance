@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../shared/utils/app_colors.dart';
 import '../widgets/custom_app_bar.dart';
 
+/// Manual Grade Entry Screen - Enter grades for students manually.
+///
+/// Features:
+/// - Course selection dropdown
+/// - Grade type selection (Midterm, Quiz, Assignment, etc.)
+/// - Student list with grade input and search
+/// - Theme-aware styling (light/dark mode)
 class ManualGradeEntryScreen extends StatefulWidget {
   final String facultyId;
   final String role;
@@ -20,7 +29,8 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
   final _supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> _courses = [];
-  List<Map<String, dynamic>> _students = [];
+  List<Map<String, dynamic>> _allStudents = [];
+  List<Map<String, dynamic>> _filteredStudents = [];
   final Map<String, Map<String, TextEditingController>> _gradeControllers = {};
 
   String? _selectedCourse;
@@ -29,6 +39,9 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
 
   String _selectedGradeType = 'Midterm';
   bool _isLoading = false;
+  String _searchQuery = '';
+
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -38,7 +51,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
 
   @override
   void dispose() {
-    // Dispose all controllers
+    _searchController.dispose();
     for (var studentControllers in _gradeControllers.values) {
       for (var controller in studentControllers.values) {
         controller.dispose();
@@ -51,27 +64,33 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final table = widget.role == 'faculty'
-          ? 'LectureCourseOffering'
-          : 'SectionCourseOffering';
-      final idField = widget.role == 'faculty' ? 'FacultyId' : 'TAId';
+      if (widget.role == 'faculty') {
+        final response = await _supabase
+            .from('LectureCourseOffering')
+            .select('*, Course(*)')
+            .eq('FacultyId', widget.facultyId);
 
-      final response = await _supabase
-          .from(table)
-          .select('*, Course(*)')
-          .eq(idField, widget.facultyId);
+        setState(() {
+          _courses = List<Map<String, dynamic>>.from(response as List);
+          _isLoading = false;
+        });
+      } else {
+        final response = await _supabase
+            .from('SectionCourseOffering')
+            .select('*, Course(*)')
+            .eq('TAId', widget.facultyId);
 
-      setState(() {
-        _courses = List<Map<String, dynamic>>.from(response as List);
-        _isLoading = false;
-      });
+        setState(() {
+          _courses = List<Map<String, dynamic>>.from(response as List);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading courses: $e')),
-        );
+        _showSnackBar('Error loading courses: $e', isError: true);
       }
+      debugPrint('Error loading courses: $e');
     }
   }
 
@@ -105,126 +124,173 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Determine the correct table and field based on role
-      final String table = widget.role == 'faculty'
-          ? 'StudentCourseEnrollment'
-          : 'StudentSection';
-      final String fieldName =
-          widget.role == 'faculty' ? 'LectureOfferingId' : 'SectionOfferingId';
+      List<Map<String, dynamic>> studentsList = [];
 
-      // Load students enrolled in the selected course with their current grades
-      final response = await _supabase.from(table).select('''
-            StudentId, 
-            Student(
-              StudentCode, 
-              User(FullName)
-            ),
-            StudentGrade(
-              MidtermGrade,
-              Quiz1Grade,
-              Quiz2Grade,
-              Quiz3Grade,
-              Assignment1Grade,
-              Assignment2Grade,
-              Assignment3Grade,
-              LabGrade,
-              MiniProjectGrade,
-              FinalGrade
-            )
-          ''').eq(fieldName, _selectedCourse!);
+      if (widget.role == 'faculty') {
+        // For Faculty: Try to get students from sections linked to this lecture
+        try {
+          final sectionsResponse = await _supabase
+              .from('SectionCourseOffering')
+              .select('SectionOfferingId')
+              .eq('LectureOfferingId', _selectedCourse!);
 
-      final studentsList = List<Map<String, dynamic>>.from(response as List);
+          final sectionIds = (sectionsResponse as List)
+              .map((s) => s['SectionOfferingId'])
+              .whereType<dynamic>()
+              .toList();
+
+          if (sectionIds.isNotEmpty) {
+            final studentsResponse = await _supabase
+                .from('StudentSection')
+                .select(
+                    'StudentId, Student(StudentId, StudentCode, User(FullName))')
+                .inFilter('SectionOfferingId', sectionIds);
+
+            studentsList =
+                List<Map<String, dynamic>>.from(studentsResponse as List);
+          }
+        } catch (e) {
+          debugPrint('Section query failed, trying direct student load: $e');
+        }
+
+        // If no students found via sections, try loading all students
+        if (studentsList.isEmpty) {
+          try {
+            final allStudentsResponse = await _supabase
+                .from('Student')
+                .select('StudentId, StudentCode, User(FullName)')
+                .limit(100);
+
+            studentsList = (allStudentsResponse as List).map((s) {
+              return {
+                'StudentId': s['StudentId'],
+                'Student': {
+                  'StudentId': s['StudentId'],
+                  'StudentCode': s['StudentCode'],
+                  'User': s['User'],
+                },
+              };
+            }).toList();
+          } catch (e) {
+            debugPrint('Direct student load failed: $e');
+          }
+        }
+      } else {
+        // For TA: Get students from this section directly
+        try {
+          final response = await _supabase
+              .from('StudentSection')
+              .select(
+                  'StudentId, Student(StudentId, StudentCode, User(FullName))')
+              .eq('SectionOfferingId', _selectedCourse!);
+
+          studentsList = List<Map<String, dynamic>>.from(response as List);
+        } catch (e) {
+          debugPrint('TA section query failed: $e');
+          // Fallback to all students
+          try {
+            final allStudentsResponse = await _supabase
+                .from('Student')
+                .select('StudentId, StudentCode, User(FullName)')
+                .limit(100);
+
+            studentsList = (allStudentsResponse as List).map((s) {
+              return {
+                'StudentId': s['StudentId'],
+                'Student': {
+                  'StudentId': s['StudentId'],
+                  'StudentCode': s['StudentCode'],
+                  'User': s['User'],
+                },
+              };
+            }).toList();
+          } catch (e2) {
+            debugPrint('Fallback student load failed: $e2');
+          }
+        }
+      }
 
       // Initialize controllers for all grade types
       _gradeControllers.clear();
       for (var student in studentsList) {
-        final studentId = student['StudentId'].toString();
-        final grades = student['StudentGrade'] as Map<String, dynamic>?;
-
-        _gradeControllers[studentId] = {
-          'Midterm': TextEditingController(
-            text: grades?['MidtermGrade']?.toString() ?? '',
-          ),
-          'Quiz1': TextEditingController(
-            text: grades?['Quiz1Grade']?.toString() ?? '',
-          ),
-          'Quiz2': TextEditingController(
-            text: grades?['Quiz2Grade']?.toString() ?? '',
-          ),
-          'Quiz3': TextEditingController(
-            text: grades?['Quiz3Grade']?.toString() ?? '',
-          ),
-          'Assignment1': TextEditingController(
-            text: grades?['Assignment1Grade']?.toString() ?? '',
-          ),
-          'Assignment2': TextEditingController(
-            text: grades?['Assignment2Grade']?.toString() ?? '',
-          ),
-          'Assignment3': TextEditingController(
-            text: grades?['Assignment3Grade']?.toString() ?? '',
-          ),
-          'Lab': TextEditingController(
-            text: grades?['LabGrade']?.toString() ?? '',
-          ),
-          'MiniProject': TextEditingController(
-            text: grades?['MiniProjectGrade']?.toString() ?? '',
-          ),
-          'Final': TextEditingController(
-            text: grades?['FinalGrade']?.toString() ?? '',
-          ),
-        };
+        final studentId = _getStudentId(student);
+        if (studentId.isNotEmpty) {
+          _gradeControllers[studentId] = {
+            'Midterm': TextEditingController(),
+            'Quiz1': TextEditingController(),
+            'Quiz2': TextEditingController(),
+            'Quiz3': TextEditingController(),
+            'Assignment1': TextEditingController(),
+            'Assignment2': TextEditingController(),
+            'Assignment3': TextEditingController(),
+            'Lab': TextEditingController(),
+            'MiniProject': TextEditingController(),
+            'Final': TextEditingController(),
+          };
+        }
       }
 
       setState(() {
-        _students = studentsList;
+        _allStudents = studentsList;
+        _filteredStudents = studentsList;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        final errorMessage = e.toString();
-        final isTableError = errorMessage.contains('StudentCourseEnrollment') || 
-                            errorMessage.contains('StudentSection');
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isTableError 
-                  ? 'Database table not found. Please run create_student_tables.sql in Supabase.'
-                  : 'Error loading students: $errorMessage'
-            ),
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-            ),
-          ),
-        );
-        
-        print('Error details: $errorMessage');
-        print('Role: ${widget.role}');
-        print('Selected course: $_selectedCourse');
+        _showSnackBar('Error loading students: $e', isError: true);
       }
+      debugPrint('Error loading students: $e');
     }
   }
 
+  void _filterStudents(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredStudents = _allStudents;
+      } else {
+        _filteredStudents = _allStudents.where((student) {
+          final name = _getStudentName(student).toLowerCase();
+          final code = _getStudentCode(student).toLowerCase();
+          final searchLower = query.toLowerCase();
+          return name.contains(searchLower) || code.contains(searchLower);
+        }).toList();
+      }
+    });
+  }
+
+  String _getStudentName(Map<String, dynamic> student) {
+    final studentData = student['Student'] as Map<String, dynamic>?;
+    return studentData?['User']?['FullName'] ?? 'Unknown Student';
+  }
+
+  String _getStudentCode(Map<String, dynamic> student) {
+    final studentData = student['Student'] as Map<String, dynamic>?;
+    return studentData?['StudentCode'] ?? 'N/A';
+  }
+
+  String _getStudentId(Map<String, dynamic> student) {
+    return student['StudentId']?.toString() ?? '';
+  }
+
   Future<void> _submitGrades() async {
-    if (_selectedCourse == null || _students.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select course and enter grades')),
-      );
+    if (_selectedCourse == null || _filteredStudents.isEmpty) {
+      _showSnackBar('Please select course and enter grades', isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Prepare grade updates
       final gradeUpdates = <Map<String, dynamic>>[];
 
-      for (var student in _students) {
-        final studentId = student['StudentId'].toString();
-        final controllers = _gradeControllers[studentId]!;
+      for (var student in _filteredStudents) {
+        final studentId = _getStudentId(student);
+        if (studentId.isEmpty) continue;
+
+        final controllers = _gradeControllers[studentId];
+        if (controllers == null) continue;
 
         final gradeData = {
           'StudentId': studentId,
@@ -244,7 +310,6 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
         gradeUpdates.add(gradeData);
       }
 
-      // Upsert grades
       await _supabase.from('StudentGrade').upsert(
             gradeUpdates,
             onConflict: 'StudentId,LectureOfferingId',
@@ -253,308 +318,663 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       setState(() => _isLoading = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Grades saved for ${gradeUpdates.length} students'),
-            backgroundColor: Colors.green,
-          ),
+        _showSnackBar(
+          'Grades saved for ${gradeUpdates.length} students',
+          isError: false,
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving grades: $e')),
-        );
+        _showSnackBar('Error saving grades: $e', isError: true);
       }
     }
   }
 
+  void _showSnackBar(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isError ? AppColors.accentRed : AppColors.accentGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: CustomAppBar(title: 'Manual Grade Entry'),
+      appBar: const CustomAppBar(title: 'Manual Grade Entry'),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(color: AppColors.primaryBlue))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Header Card
+                  _buildHeaderCard(colorScheme, isDark),
+                  const SizedBox(height: 24),
+
                   // Course Selection
-                  const Text(
-                    'Select Course',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedCourse,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Choose a course',
-                      prefixIcon: Icon(Icons.book, color: Color(0xFFD88A2D)),
-                    ),
-                    items: _courses.map((course) {
-                      final courseData =
-                          course['Course'] as Map<String, dynamic>;
-                      return DropdownMenuItem<String>(
-                        value: course['LectureOfferingId']?.toString() ??
-                            course['SectionOfferingId']?.toString(),
-                        child: Text(
-                          '${courseData['Code']} - ${courseData['Title']}',
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedCourse = value;
-                        _students.clear();
-                      });
-                      _loadStudents();
-                    },
-                  ),
+                  _buildCourseSelection(colorScheme, isDark),
                   const SizedBox(height: 20),
 
                   // Course Settings (Lab & Mini Project)
                   if (_selectedCourse != null) ...[
-                    const Text(
-                      'Course Settings',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CheckboxListTile(
-                            value: _courseHasLab,
-                            onChanged: (value) {
-                              setState(() {
-                                _courseHasLab = value ?? false;
-                              });
-                            },
-                            title: const Text('Has Lab'),
-                            subtitle:
-                                const Text('Course includes lab component'),
-                            activeColor: const Color(0xFFD88A2D),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        Expanded(
-                          child: CheckboxListTile(
-                            value: _courseHasMiniProject,
-                            onChanged: (value) {
-                              setState(() {
-                                _courseHasMiniProject = value ?? false;
-                              });
-                            },
-                            title: const Text('Has Mini Project'),
-                            subtitle: const Text('Course includes project'),
-                            activeColor: const Color(0xFFD88A2D),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildCourseSettings(colorScheme, isDark),
                     const SizedBox(height: 20),
                   ],
 
-                  // Grade Type Selector
-                  if (_students.isNotEmpty) ...[
-                    const Text(
-                      'Select Grade Type',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _getAvailableGradeTypes().map((type) {
-                        return ChoiceChip(
-                          label: Text(type),
-                          selected: _selectedGradeType == type,
-                          onSelected: (selected) {
-                            setState(() => _selectedGradeType = type);
-                          },
-                          selectedColor: const Color(0xFFD88A2D),
-                          backgroundColor: Colors.grey[200],
-                          labelStyle: TextStyle(
-                            color: _selectedGradeType == type
-                                ? Colors.white
-                                : Colors.black87,
-                            fontWeight: _selectedGradeType == type
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 8),
-                    // Grade type info
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              size: 20, color: Colors.blue.shade700),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Entering grades for: $_selectedGradeType (Max: ${_getMaxGrade()})',
-                              style: TextStyle(
-                                color: Colors.blue.shade900,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  // Grade Type Selector and Students List
+                  if (_allStudents.isNotEmpty) ...[
+                    _buildGradeTypeSelector(colorScheme, isDark),
                     const SizedBox(height: 20),
+
+                    // Student Search
+                    _buildStudentSearch(colorScheme, isDark),
+                    const SizedBox(height: 16),
 
                     // Students List with Grade Input
-                    const Text(
-                      'Enter Grades',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _students.length,
-                      itemBuilder: (context, index) {
-                        final student = _students[index];
-                        final studentData =
-                            student['Student'] as Map<String, dynamic>;
-                        final studentId = student['StudentId'].toString();
-                        final name =
-                            studentData['User']?['FullName'] ?? 'Unknown';
-                        final code = studentData['StudentCode'] ?? 'N/A';
-                        final controller =
-                            _gradeControllers[studentId]![_selectedGradeType]!;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            title: Text(name),
-                            subtitle: Text('Code: $code'),
-                            trailing: SizedBox(
-                              width: 100,
-                              child: TextField(
-                                controller: controller,
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                  border: const OutlineInputBorder(),
-                                  hintText: '0-100',
-                                  suffix: Text('/$_getMaxGrade()'),
-                                ),
-                                onChanged: (value) {
-                                  // Validate range
-                                  final grade = double.tryParse(value);
-                                  if (grade != null &&
-                                      (grade < 0 || grade > _getMaxGrade())) {
-                                    controller.text = '';
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
+                    _buildStudentsList(colorScheme, isDark),
+                    const SizedBox(height: 24),
 
                     // Submit Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _submitGrades,
-                        icon: const Icon(Icons.save),
-                        label:
-                            Text('Save Grades (${_students.length} students)'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D32),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                    ),
+                    _buildSubmitButton(),
                   ],
 
                   if (_selectedCourse != null &&
-                      _students.isEmpty &&
+                      _allStudents.isEmpty &&
                       !_isLoading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text(
-                          'No students enrolled in this course',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    ),
+                    _buildEmptyState(colorScheme, isDark),
                 ],
               ),
             ),
     );
   }
 
+  Widget _buildHeaderCard(ColorScheme colorScheme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+            AppColors.accentPurple.withOpacity(isDark ? 0.15 : 0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.grade_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Manual Grade Entry',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Enter grades for students manually',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCourseSelection(ColorScheme colorScheme, bool isDark) {
+    final isTA = widget.role == 'teacher_assistant';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          isTA ? 'Select Section' : 'Select Course',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedCourse,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
+            ),
+            hintText: isTA ? 'Choose a section' : 'Choose a course',
+            hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.4)),
+            prefixIcon: Icon(Icons.book_rounded, color: AppColors.primaryBlue),
+            filled: true,
+            fillColor: isDark ? colorScheme.surface : Colors.white,
+          ),
+          dropdownColor: colorScheme.surface,
+          items: _courses.map((course) {
+            final courseData = course['Course'] as Map<String, dynamic>?;
+            final id = widget.role == 'faculty'
+                ? course['LectureOfferingId']?.toString()
+                : course['SectionOfferingId']?.toString();
+            return DropdownMenuItem<String>(
+              value: id,
+              child: Text(
+                courseData != null
+                    ? '${courseData['Code']} - ${courseData['Title']}'
+                    : 'Unknown Course',
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedCourse = value;
+              _allStudents.clear();
+              _filteredStudents.clear();
+              _searchController.clear();
+              _searchQuery = '';
+            });
+            _loadStudents();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCourseSettings(ColorScheme colorScheme, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Course Settings',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? colorScheme.surface : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.primaryBlue.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: CheckboxListTile(
+                  value: _courseHasLab,
+                  onChanged: (value) {
+                    setState(() => _courseHasLab = value ?? false);
+                  },
+                  title: Text(
+                    'Has Lab',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 14,
+                    ),
+                  ),
+                  activeColor: AppColors.primaryBlue,
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: colorScheme.outline.withOpacity(0.2),
+              ),
+              Expanded(
+                child: CheckboxListTile(
+                  value: _courseHasMiniProject,
+                  onChanged: (value) {
+                    setState(() => _courseHasMiniProject = value ?? false);
+                  },
+                  title: Text(
+                    'Has Project',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 14,
+                    ),
+                  ),
+                  activeColor: AppColors.primaryBlue,
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGradeTypeSelector(ColorScheme colorScheme, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Select Grade Type',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _getAvailableGradeTypes().map((type) {
+            final isSelected = _selectedGradeType == type;
+            return ChoiceChip(
+              label: Text(type),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() => _selectedGradeType = type);
+              },
+              selectedColor: AppColors.primaryBlue,
+              backgroundColor: isDark ? colorScheme.surface : Colors.grey[200],
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withOpacity(isDark ? 0.15 : 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 20, color: AppColors.primaryBlue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Entering grades for: $_selectedGradeType (Max: ${_getMaxGrade()})',
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStudentSearch(ColorScheme colorScheme, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Search Students',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withOpacity(0.08),
+                blurRadius: 15,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              prefixIcon:
+                  Icon(Icons.search_rounded, color: AppColors.primaryBlue),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear_rounded,
+                          color: colorScheme.onSurface.withOpacity(0.5)),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterStudents('');
+                      },
+                    )
+                  : null,
+              hintText: 'Search by name or code...',
+              hintStyle: TextStyle(
+                color: colorScheme.onSurface.withOpacity(0.4),
+                fontSize: 14,
+              ),
+              filled: true,
+              fillColor: isDark ? colorScheme.surface : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
+            onChanged: _filterStudents,
+          ),
+        ),
+        if (_searchQuery.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Found ${_filteredStudents.length} student(s)',
+            style: TextStyle(
+              fontSize: 12,
+              color: colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStudentsList(ColorScheme colorScheme, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Enter Grades',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${_filteredStudents.length} students',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_filteredStudents.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: isDark ? colorScheme.surface : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primaryBlue.withOpacity(0.2)),
+            ),
+            child: Center(
+              child: Text(
+                'No students match your search',
+                style: TextStyle(
+                  color: colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _filteredStudents.length,
+            itemBuilder: (context, index) {
+              final student = _filteredStudents[index];
+              final studentId = _getStudentId(student);
+              final name = _getStudentName(student);
+              final code = _getStudentCode(student);
+              final controller =
+                  _gradeControllers[studentId]?[_selectedGradeType];
+
+              if (controller == null) return const SizedBox.shrink();
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? colorScheme.surface : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: AppColors.primaryBlue.withOpacity(0.2)),
+                ),
+                child: ListTile(
+                  leading: Container(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircleAvatar(
+                      backgroundColor: Colors.transparent,
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Code: $code',
+                    style: TextStyle(
+                        color: colorScheme.onSurface.withOpacity(0.6)),
+                  ),
+                  trailing: SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                              color: AppColors.primaryBlue.withOpacity(0.3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                              color: AppColors.primaryBlue, width: 2),
+                        ),
+                        hintText: '0',
+                        hintStyle: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.3)),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 10),
+                        suffixText: '/${_getMaxGrade()}',
+                        suffixStyle: TextStyle(
+                          color: colorScheme.onSurface.withOpacity(0.5),
+                          fontSize: 11,
+                        ),
+                        filled: true,
+                        fillColor:
+                            isDark ? colorScheme.surfaceContainerHighest : null,
+                      ),
+                      onChanged: (value) {
+                        final grade = double.tryParse(value);
+                        if (grade != null &&
+                            (grade < 0 || grade > _getMaxGrade())) {
+                          controller.text = '';
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _submitGrades,
+        icon: const Icon(Icons.save_rounded),
+        label: Text(
+          'Save Grades (${_filteredStudents.length} students)',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accentGreen,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ColorScheme colorScheme, bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(48),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                    AppColors.accentPurple.withOpacity(isDark ? 0.15 : 0.08),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.people_outline_rounded,
+                size: 56,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No students found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No students are enrolled in this course yet',
+              style: TextStyle(
+                color: colorScheme.onSurface.withOpacity(0.6),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   int _getMaxGrade() {
     switch (_selectedGradeType) {
       case 'Midterm':
-        return 20; // 20% of total grade
+        return 20;
       case 'Final':
-        return 40; // 40% of total grade
+        return 40;
       case 'Quiz1':
       case 'Quiz2':
       case 'Quiz3':
-        return 5; // 5% each quiz
+        return 5;
       case 'Assignment1':
       case 'Assignment2':
       case 'Assignment3':
-        return 5; // 5% each assignment
+        return 5;
       case 'Lab':
-        return 10; // 10% for lab
+        return 10;
       case 'MiniProject':
-        return 10; // 10% for mini project
+        return 10;
       default:
         return 100;
-    }
-  }
-
-  String _getGradeDescription() {
-    switch (_selectedGradeType) {
-      case 'Midterm':
-        return 'Midterm Exam (20% of final grade)';
-      case 'Final':
-        return 'Final Exam (40% of final grade)';
-      case 'Quiz1':
-        return 'Quiz 1 (5% of final grade)';
-      case 'Quiz2':
-        return 'Quiz 2 (5% of final grade)';
-      case 'Quiz3':
-        return 'Quiz 3 (5% of final grade)';
-      case 'Assignment1':
-        return 'Assignment 1 (5% of final grade)';
-      case 'Assignment2':
-        return 'Assignment 2 (5% of final grade)';
-      case 'Assignment3':
-        return 'Assignment 3 (5% of final grade)';
-      case 'Lab':
-        return 'Lab Work (10% of final grade)';
-      case 'MiniProject':
-        return 'Mini Project (10% of final grade)';
-      default:
-        return '';
     }
   }
 }
