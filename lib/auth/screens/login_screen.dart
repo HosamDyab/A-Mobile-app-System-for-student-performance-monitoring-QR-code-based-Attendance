@@ -529,36 +529,23 @@ class _LoginScreenState extends State<LoginScreen>
                                 scale: _logoScaleAnimation.value,
                                 child: Container(
                                   height: logoHeight,
-                                  padding: const EdgeInsets.all(20), // similar to WelcomeScreen
+                                  padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        AppColors.primaryBlue.withOpacity(0.1),
-                                        AppColors.secondaryOrange.withOpacity(0.05),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(28), // match WelcomeScreen
+                                    color: Colors.transparent, // No background
+                                    borderRadius: BorderRadius.circular(28), // optional: keep rounded corners
                                     border: Border.all(
-                                      color: AppColors.primaryBlue.withOpacity(0.2),
-                                      width: 1.5,
+                                      color: Colors.transparent, // optional: remove border if not needed
+                                      width: 0,
                                     ),
                                   ),
                                   child: Image.asset(
                                     'lib/images/MTI Logo.png',
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          gradient: AppColors.primaryGradient,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(
-                                          Icons.school_rounded,
-                                          size: 120,
-                                          color: Colors.white,
-                                        ),
+                                      return const Icon(
+                                        Icons.school_rounded,
+                                        size: 120,
+                                        color: Colors.white,
                                       );
                                     },
                                   ),
@@ -566,6 +553,7 @@ class _LoginScreenState extends State<LoginScreen>
                               );
                             },
                           ),
+
 
                           SizedBox(height: isTablet ? 32 : 24),
 

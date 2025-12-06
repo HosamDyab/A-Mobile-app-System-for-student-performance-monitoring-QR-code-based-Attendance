@@ -11,7 +11,7 @@ class LogoutButton extends StatelessWidget {
     this.showAsIcon = true,
   });
 
-  static const Color mainColor = Color(0xFF2C6DF0);
+  static const Color mainColor = Color(0xFFF37721); // Updated color
 
   void _showLogoutDialog(BuildContext context) {
     final theme = Theme.of(context);

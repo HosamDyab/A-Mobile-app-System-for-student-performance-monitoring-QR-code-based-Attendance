@@ -216,7 +216,8 @@ class _ProfilePageState extends State<ProfilePage> {
           actions: [
             const ThemeToggleButton(),
             IconButton(
-              icon: Icon(Icons.logout_rounded, color: Color(0xFF2C6DF0)
+              icon: Icon(Icons.logout_rounded, color:Color(0xFFF37721)
+
               ),
               onPressed: () => _showLogoutDialog(context),
               tooltip: 'Logout',
@@ -327,7 +328,8 @@ class _ProfilePageState extends State<ProfilePage> {
                         icon: const Icon(Icons.logout_rounded,color: Colors.white),
                         label: const Text('Logout'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF2C6DF0)
+                          backgroundColor:Color(0xFFF37721)
+
                           ,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -417,7 +419,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _showLogoutDialog(BuildContext context) {
-    const mainColor = Color(0xFF2C6DF0);
+    const mainColor = Color(0xFFF37721); // Updated color
 
     showDialog(
       context: context,
@@ -471,5 +473,6 @@ class _ProfilePageState extends State<ProfilePage> {
       },
     );
   }
+
 
 }

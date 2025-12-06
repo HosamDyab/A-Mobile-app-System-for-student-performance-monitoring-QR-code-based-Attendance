@@ -659,38 +659,140 @@ class _GpaCalcPageState extends State<GpaCalcPage> {
 
   /// Dialog to create a new semester record.
   Future<void> _showAddSemesterDialog() async {
-    final titleCtrl = TextEditingController();
+    String selectedSemester = 'Semester 1';
     final rankCtrl = TextEditingController();
+
+    final semesterOptions = [
+      'Semester 1',
+      'Semester 2',
+      'Semester 3',
+      'Semester 4',
+      'Semester 5',
+      'Semester 6',
+      'Semester 7',
+      'Semester 8',
+      'Summer Semester',
+      'Winter Semester',
+    ];
+
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Semester'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-              controller: titleCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'Title (e.g. Semester 1)')),
-          TextField(
-              controller: rankCtrl,
-              decoration: const InputDecoration(labelText: 'Rank (optional)'),
-              keyboardType: TextInputType.number),
-        ]),
-        actions: [
-          TextButton(
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.add_circle_outline_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text('Add Semester'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedSemester,
+                decoration: InputDecoration(
+                  labelText: 'Select Semester',
+                  labelStyle: TextStyle(color: AppColors.primaryBlue),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: AppColors.primaryBlue,
+                      width: 2,
+                    ),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.calendar_today_rounded,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                items: semesterOptions.map((semester) {
+                  return DropdownMenuItem(
+                    value: semester,
+                    child: Text(semester),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      selectedSemester = value;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              // TextField(
+              //   controller: rankCtrl,
+              //   decoration: InputDecoration(
+              //     labelText: 'Rank (optional)',
+              //     labelStyle: TextStyle(color: AppColors.primaryBlue),
+              //     border: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(12),
+              //     ),
+              //     focusedBorder: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(12),
+              //       borderSide: BorderSide(
+              //         color: AppColors.primaryBlue,
+              //         width: 2,
+              //       ),
+              //     ),
+              //     prefixIcon: Icon(
+              //       Icons.numbers_rounded,
+              //       color: AppColors.primaryBlue,
+              //     ),
+              //   ),
+              //   keyboardType: TextInputType.number,
+              // ),
+            ],
+          ),
+          actions: [
+            TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final title = titleCtrl.text.trim();
-              final rank = int.tryParse(rankCtrl.text.trim()) ?? 0;
-              if (title.isNotEmpty) {
-                cubit.addSemester(title, rank: rank);
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.primaryBlue),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              onPressed: () {
+                final rank = int.tryParse(rankCtrl.text.trim()) ?? 0;
+                cubit.addSemester(selectedSemester, rank: rank);
                 Navigator.pop(context);
-              }
-            },
-            child: const Text('Add'),
-          )
-        ],
+              },
+              child: const Text(
+                'Add',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

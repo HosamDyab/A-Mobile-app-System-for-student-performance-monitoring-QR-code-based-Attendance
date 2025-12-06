@@ -119,12 +119,11 @@ class ProfileCard extends StatelessWidget {
                             vertical: 10,
                           ),
                           decoration: BoxDecoration(
-                            gradient: AppColors.secondaryGradient,
+                            color: const Color(0xFFF37721), // Changed from gradient to solid color
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color:
-                                    AppColors.secondaryOrange.withOpacity(0.3),
+                                color: const Color(0xFFF37721).withOpacity(0.3), // Optional: match shadow color
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -150,6 +149,7 @@ class ProfileCard extends StatelessWidget {
                             ],
                           ),
                         ),
+
                       ],
                     ),
                   ),

@@ -294,7 +294,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 label: 'Teacher Assistant',
                                 role: 'teacher_assistant',
                                 isOutlined: true,
-                                icon: Icons.support_agent_rounded,
+                                icon: Icons.groups,
                                 delay: 300,
                                 isMobile: isMobile,
                               ),
@@ -351,7 +351,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               label: label,
               icon: icon,
               isOutlined: isOutlined,
-              height: isMobile ? 54 : 64,
+              height: isMobile ? 60 : 64,
               onPressed: () {
                 Navigator.push(
                   context,

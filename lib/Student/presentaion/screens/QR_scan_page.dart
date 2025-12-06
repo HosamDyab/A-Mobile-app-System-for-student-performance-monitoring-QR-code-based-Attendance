@@ -305,20 +305,17 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                                       end: Alignment.bottomRight,
                                       colors: [
                                         AppColors.primaryBlue.withOpacity(0.1),
-                                        AppColors.secondaryOrange
-                                            .withOpacity(0.1),
+                                        const Color(0xFFF37721).withOpacity(0.1),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(24),
                                     border: Border.all(
-                                      color: AppColors.primaryBlue
-                                          .withOpacity(0.3),
+                                      color: AppColors.primaryBlue.withOpacity(0.3),
                                       width: 3,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.primaryBlue
-                                            .withOpacity(0.2),
+                                        color: AppColors.primaryBlue.withOpacity(0.2),
                                         blurRadius: 20,
                                         spreadRadius: 4,
                                       ),
@@ -351,17 +348,16 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      AppColors.secondaryOrange.withOpacity(0),
-                                      AppColors.secondaryOrange,
-                                      AppColors.secondaryOrange.withOpacity(0),
+                                      const Color(0xFFF37721).withOpacity(0),
+                                      const Color(0xFFF37721),
+                                      const Color(0xFFF37721).withOpacity(0),
                                     ],
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.secondaryOrange
-                                          .withOpacity(0.5),
+                                      color: const Color(0xFFF37721).withOpacity(0.5),
                                       blurRadius: 8,
                                       spreadRadius: 2,
                                     ),
@@ -380,14 +376,8 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                             height: 30,
                             decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
-                                left: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
+                                top: BorderSide(color: const Color(0xFFF37721), width: 4),
+                                left: BorderSide(color: const Color(0xFFF37721), width: 4),
                               ),
                             ),
                           ),
@@ -400,14 +390,8 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                             height: 30,
                             decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
-                                right: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
+                                top: BorderSide(color: const Color(0xFFF37721), width: 4),
+                                right: BorderSide(color: const Color(0xFFF37721), width: 4),
                               ),
                             ),
                           ),
@@ -420,14 +404,8 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                             height: 30,
                             decoration: BoxDecoration(
                               border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
-                                left: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
+                                bottom: BorderSide(color: const Color(0xFFF37721), width: 4),
+                                left: BorderSide(color: const Color(0xFFF37721), width: 4),
                               ),
                             ),
                           ),
@@ -440,14 +418,8 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                             height: 30,
                             decoration: BoxDecoration(
                               border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
-                                right: BorderSide(
-                                  color: AppColors.secondaryOrange,
-                                  width: 4,
-                                ),
+                                bottom: BorderSide(color: const Color(0xFFF37721), width: 4),
+                                right: BorderSide(color: const Color(0xFFF37721), width: 4),
                               ),
                             ),
                           ),
@@ -456,6 +428,7 @@ class _ScanQRScreenState extends State<ScanQRScreen>
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 25),
                 HoverScaleWidget(
                   onTap: () {
