@@ -1,64 +1,55 @@
-part 'student_model.g.dart';
-
-// Ensure field names EXACTLY match your Supabase table
-// @JsonSerializable()
-// class StudentModel {
-//   final String id;
-//   final String name;
-//   final String grade;
-//   final String level;
-//   final bool is_present; // ← This must match your DB column name
-//   final String? avatar_url; // ← This must match your DB column name
-  
-//   StudentModel({
-//     required this.id,
-//     required this.name,
-//     required this.grade,
-//     required this.level,
-//     this.is_present = false,
-//     this.avatar_url, DateTime? lastAttendance,
-//   });
-  
-//   // Add this constructor for Supabase compatibility
-//   factory StudentModel.fromJson(Map<String, dynamic> json) => _$StudentModelFromJson(json);
-  
-//   Map<String, dynamic> toJson() => _$StudentModelToJson(this);
-// }
-
+// student_model.dart
 
 class StudentModel {
   final String studentId;
-  final String userId;
-  final String studentCode;
-  final String major;
-  final double currentGpa;
-  final String academicLevel;
-  final String? fullName; // ← Add this (nullable since it might be null)
-  final String? avatarUrl;
+  final String fullName;
+  final String email;
+  final String? major;
+  final int? academicLevel;
+  final double? currentGpa;
+  final int totalCreditHoursEarned;
+  final String? entryYear;
 
   StudentModel({
     required this.studentId,
-    required this.userId,
-    required this.studentCode,
-    required this.major,
-    required this.currentGpa,
-    required this.academicLevel,
-    this.fullName, // ← Make it nullable
-    this.avatarUrl,
+    required this.fullName,
+    required this.email,
+    this.major,
+    this.academicLevel,
+    this.currentGpa,
+    this.totalCreditHoursEarned = 0,
+    this.entryYear,
   });
 
   factory StudentModel.fromJson(Map<String, dynamic> json) {
     return StudentModel(
-      studentId: json['StudentId']?.toString() ?? json['student_id']?.toString() ?? '',
-      userId: json['UserId']?.toString() ?? json['user_id']?.toString() ?? '',
-      studentCode: json['StudentCode']?.toString() ?? json['student_code']?.toString() ?? '',
-      major: json['Major']?.toString() ?? json['major']?.toString() ?? '',
-      currentGpa: (json['CurrentGPA'] ?? json['current_gpa'] ?? 0.0).toDouble(),
-      academicLevel: json['AcademicLevel']?.toString() ?? json['academic_level']?.toString() ?? '',
-      fullName: json['User']?['FullName']?.toString() ?? json['full_name']?.toString(),
-      avatarUrl: json['AvatarURL']?.toString() ?? json['avatar_url']?.toString(),
+      studentId: json['studentid']?.toString() ?? '',
+      fullName: json['fullname']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      major: json['major']?.toString(),
+      academicLevel: json['academiclevel'] as int?,
+      currentGpa: (json['currentgpa'] as num?)?.toDouble(),
+      totalCreditHoursEarned: json['totalcredithoursearned'] as int? ?? 0,
+      entryYear: json['entryyear']?.toString(),
     );
   }
-  
-  Map<String, dynamic> toJson() => _$StudentModelToJson(this);
+
+  Map<String, dynamic> toJson() {
+    return {
+      'studentid': studentId,
+      'fullname': fullName,
+      'email': email,
+      'major': major,
+      'academiclevel': academicLevel,
+      'currentgpa': currentGpa,
+      'totalcredithoursearned': totalCreditHoursEarned,
+      'entryyear': entryYear,
+    };
+  }
+
+  // Helper to get level as string (L1, L2, L3, L4)
+  String get academicLevelString {
+    if (academicLevel == null) return 'Unknown';
+    return 'L$academicLevel';
+  }
 }

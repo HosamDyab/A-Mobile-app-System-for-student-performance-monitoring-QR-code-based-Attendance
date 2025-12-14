@@ -1,47 +1,88 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:qra/Teacher/services/repositories/live_attendance_repository.dart';
-import 'package:qra/Teacher/viewmodels/live_attendance/live_attendance_state.dart';
+import '../../services/repositories/live_attendance_repository.dart';
+import 'live_attendance_state.dart';
 
-/// Cubit for managing attendance state and fetching attendance data
 class LiveAttendanceCubit extends Cubit<LiveAttendanceState> {
   final LiveAttendanceRepository repository;
+  Timer? _pollingTimer;
 
-  /// Creates an instance of [LiveAttendanceCubit] with the provided repository
   LiveAttendanceCubit(this.repository) : super(const LiveAttendanceInitial());
 
-  /// Fetches attendance data for a given lecture instance ID
-  ///
-  /// [instanceId] - The unique identifier for the lecture instance
-  ///
-  /// Emits [LiveAttendanceLoading] while fetching, [LiveAttendanceLoaded] on success,
-  /// or [LiveAttendanceError] if an error occurs
-  Future<void> fetchAttend(String instanceId) async {
-    // Validate input
+  /// Start polling for attendance updates
+  void startPolling(String instanceId, {int intervalSeconds = 3}) {
+    if (instanceId.isEmpty) {
+      emit(const LiveAttendanceError('Instance ID cannot be empty'));
+      return;
+    }
+
+    print('🔄 Starting polling for instance: $instanceId (every ${intervalSeconds}s)');
+
+    // Initial fetch
+    fetchAttend(instanceId);
+
+    // Start periodic updates
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(
+      Duration(seconds: intervalSeconds),
+          (_) {
+        print('⏱️ Polling tick - fetching attendance...');
+        fetchAttend(instanceId, silent: true);
+      },
+    );
+  }
+
+  /// Stop polling when session ends
+  void stopPolling() {
+    print('🛑 Stopping attendance polling');
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  Future<void> fetchAttend(String instanceId, {bool silent = false}) async {
     if (instanceId.isEmpty) {
       emit(const LiveAttendanceError('Instance ID cannot be empty'));
       return;
     }
 
     try {
-      emit(const LiveAttendanceLoading());
+      // Only show loading state on initial fetch, not during polling
+      if (!silent) {
+        emit(const LiveAttendanceLoading());
+      }
 
       final data = await repository.getAttendanceForLecture(instanceId);
 
-      // Check if data is null or empty
+      if (!silent) {
+        print('✅ Initial fetch complete: ${data.length} records');
+      } else {
+        print('🔄 Poll update: ${data.length} records');
+      }
+
       emit(LiveAttendanceLoaded(data));
     } catch (e) {
-      // Provide more descriptive error messages
+      print('❌ Error fetching attendance: $e');
       final errorMessage = e.toString().replaceFirst('Exception: ', '');
-      emit(LiveAttendanceError(
-        errorMessage.isNotEmpty
-            ? errorMessage
-            : 'Failed to fetch attendance data. Please try again.',
-      ));
+
+      // Only emit error on initial fetch, not during silent polling
+      if (!silent) {
+        emit(LiveAttendanceError(
+          errorMessage.isNotEmpty
+              ? errorMessage
+              : 'Failed to fetch attendance data. Please try again.',
+        ));
+      }
     }
   }
 
-  /// Resets the cubit to its initial state
   void reset() {
+    stopPolling();
     emit(const LiveAttendanceInitial());
+  }
+
+  @override
+  Future<void> close() {
+    stopPolling();
+    return super.close();
   }
 }

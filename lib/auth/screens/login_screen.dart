@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../logger.dart';
 import 'forgot_password_screen.dart';
 import '../../Student/presentaion/screens/StudentView.dart';
 import '../../Teacher/TeacherView.dart';
@@ -12,8 +13,8 @@ import '../../shared/widgets/animated_text_field.dart';
 import '../../shared/utils/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
-  final String role;
-  final String roleName;
+  final String role;      // student | faculty | teacher_assistant
+  final String roleName;  // Student | Faculty | Teacher Assistant
 
   const LoginScreen({
     super.key,
@@ -28,11 +29,15 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+
+  // 🔹 نستخدم الـ ID بدل الإيميل، لكن نحافظ على 2 حقول: ID + Password
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
+
   late AnimationController _containerController;
   late AnimationController _logoController;
   late AnimationController _textController;
@@ -41,6 +46,24 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<Offset> _textSlideAnimation;
   late Animation<double> _textOpacityAnimation;
   late Animation<double> _fieldAnimation;
+
+  String get _idLabel {
+    if (widget.role == 'student') return 'Student ID';
+    if (widget.role == 'faculty') return 'Faculty SN';
+    return 'TA SN';
+  }
+
+  String get _idHint {
+    if (widget.role == 'student') return 'Enter your Student ID';
+    if (widget.role == 'faculty') return 'Enter your Faculty SN';
+    return 'Enter your TA SN';
+  }
+
+  String get _userTypeForDb {
+    // مطابقة role في الـ DB
+    if (widget.role == 'teacher_assistant') return 'ta';
+    return widget.role; // student | faculty
+  }
 
   @override
   void initState() {
@@ -109,15 +132,15 @@ class _LoginScreenState extends State<LoginScreen>
       _containerController.forward();
     });
 
-    // Load saved email if Remember Me was enabled
-    _loadSavedEmail();
+    _loadSavedId();
   }
 
-  Future<void> _loadSavedEmail() async {
-    final savedEmail = await AuthService.getRememberedEmail(widget.role);
-    if (savedEmail != null && mounted) {
+  Future<void> _loadSavedId() async {
+    // نستخدم نفس AuthService لكن نخزن الـ ID بدل الإيميل
+    final saved = await AuthService.getRememberedEmail(widget.role);
+    if (saved != null && mounted) {
       setState(() {
-        _emailController.text = savedEmail;
+        _idController.text = saved;
         _rememberMe = true;
       });
     }
@@ -128,304 +151,241 @@ class _LoginScreenState extends State<LoginScreen>
     _containerController.dispose();
     _logoController.dispose();
     _textController.dispose();
-    _emailController.dispose();
+    _idController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Map<String, String> _extractUserInfo(String email) {
-    final username = email.split('@')[0];
-
-    if (widget.role == 'student') {
-      final parts = username.split('.');
-      String name = '';
-      String id = '';
-
-      if (parts.length >= 2) {
-        name = parts[0];
-        id = parts[1];
-        name = name[0].toUpperCase() + name.substring(1);
-      }
-
-      return {'name': name, 'id': id, 'role': 'student'};
-    } else if (widget.role == 'faculty') {
-      String name = username.toLowerCase().startsWith('dr')
-          ? username.substring(2)
-          : username;
-      name = name[0].toUpperCase() + name.substring(1);
-
-      return {'name': 'Dr. $name', 'id': '', 'role': 'faculty'};
-    } else if (widget.role == 'teacher_assistant') {
-      final parts = username.split('.');
-      String firstName = '';
-      String lastName = '';
-
-      if (parts.length >= 2) {
-        firstName = parts[0][0].toUpperCase() + parts[0].substring(1);
-        lastName = parts[1][0].toUpperCase() + parts[1].substring(1);
-      }
-
-      return {
-        'name': '$firstName $lastName',
-        'id': '',
-        'role': 'teacher_assistant'
-      };
-    }
-
-    return {'name': '', 'id': '', 'role': ''};
-  }
-
-  bool _isValidMTIEmail(String email) {
-    if (widget.role == 'student') {
-      final regex = RegExp(r'^[a-zA-Z]+\.\d+@cs\.mti\.edu\.eg$');
-      return regex.hasMatch(email);
-    } else if (widget.role == 'faculty') {
-      final regex =
-          RegExp(r'^dr[a-zA-Z]+@cs\.mti\.edu\.eg$', caseSensitive: false);
-      return regex.hasMatch(email);
-    } else if (widget.role == 'teacher_assistant') {
-      final regex = RegExp(r'^[a-zA-Z]+\.[a-zA-Z]+@cs\.mti\.edu\.eg$');
-      return regex.hasMatch(email);
-    }
-    return false;
-  }
+// ==========================================
+// STEP 1: Add this to your login_screen.dart
+// ==========================================
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final supabase = SupabaseManager.client;
+      final loginInput = _idController.text.trim();
+      final password = _passwordController.text.trim();
+
+      // Convert role to database format
+      String userTypeForDb = widget.role;
+      if (widget.role == 'teacher_assistant') userTypeForDb = 'ta';
+
+      // ✅ Determine if input is email or ID
+      final bool isEmail = loginInput.contains('@');
+
+      String userId = loginInput;
+      String userEmail = '';
+
+      // If email, get the actual user ID first
+      if (isEmail) {
+        if (widget.role == 'student') {
+          final student = await supabase
+              .from('student')
+              .select('studentid, email')
+              .eq('email', loginInput)
+              .maybeSingle();
+
+          if (student == null) {
+            throw Exception('No account found with this email.');
+          }
+          userId = student['studentid'];
+          userEmail = student['email'];
+
+        } else if (widget.role == 'faculty') {
+          final fac = await supabase
+              .from('faculty')
+              .select('facultysnn, email')
+              .eq('email', loginInput)
+              .maybeSingle();
+
+          if (fac == null) {
+            throw Exception('No account found with this email.');
+          }
+          userId = fac['facultysnn'];
+          userEmail = fac['email'];
+
+        } else if (widget.role == 'teacher_assistant') {
+          final ta = await supabase
+              .from('ta')
+              .select('tasnn, email')
+              .eq('email', loginInput)
+              .maybeSingle();
+
+          if (ta == null) {
+            throw Exception('No account found with this email.');
+          }
+          userId = ta['tasnn'];
+          userEmail = ta['email'];
+        }
+      }
+
+      // ✅ STEP 1: Check credentials
+      final creds = await supabase
+          .from('user_credentials')
+          .select('user_id, user_type, hashed_password')
+          .eq('user_id', userId)
+          .eq('user_type', userTypeForDb)
+          .maybeSingle();
+
+      if (creds == null) {
+        await SystemLogger.logFailedLogin(
+          userId: userId,
+          userType: userTypeForDb,
+          reason: 'User not found',
+        );
+        throw Exception('Invalid credentials.');
+      }
+
+      // ✅ STEP 2: Check password
+      if (creds['hashed_password'] != password) {
+        await SystemLogger.logFailedLogin(
+          userId: userId,
+          userType: userTypeForDb,
+          reason: 'Incorrect password',
+        );
+        throw Exception('Invalid credentials.');
+      }
+
+      // ✅ STEP 3: Get user details (if not already fetched)
+      String fullName = '';
+      String entityId = userId;
+
+      if (!isEmail || userEmail.isEmpty) {
+        if (widget.role == 'student') {
+          final student = await supabase
+              .from('student')
+              .select('studentid, fullname, email')
+              .eq('studentid', userId)
+              .maybeSingle();
+
+          if (student == null) throw Exception('Student not found.');
+          fullName = student['fullname'];
+          entityId = student['studentid'];
+          userEmail = student['email'];
+
+        } else if (widget.role == 'faculty') {
+          final fac = await supabase
+              .from('faculty')
+              .select('facultysnn, fullname, email')
+              .eq('facultysnn', userId)
+              .maybeSingle();
+
+          if (fac == null) throw Exception('Faculty not found.');
+          fullName = fac['fullname'];
+          entityId = fac['facultysnn'];
+          userEmail = fac['email'];
+
+        } else if (widget.role == 'teacher_assistant') {
+          final ta = await supabase
+              .from('ta')
+              .select('tasnn, fullname, email')
+              .eq('tasnn', userId)
+              .maybeSingle();
+
+          if (ta == null) throw Exception('TA not found.');
+          fullName = ta['fullname'];
+          entityId = ta['tasnn'];
+          userEmail = ta['email'];
+        }
+      } else {
+        // Get full name if we only have email
+        if (widget.role == 'student') {
+          final student = await supabase
+              .from('student')
+              .select('fullname')
+              .eq('studentid', userId)
+              .maybeSingle();
+          fullName = student?['fullname'] ?? '';
+
+        } else if (widget.role == 'faculty') {
+          final fac = await supabase
+              .from('faculty')
+              .select('fullname')
+              .eq('facultysnn', userId)
+              .maybeSingle();
+          fullName = fac?['fullname'] ?? '';
+
+        } else if (widget.role == 'teacher_assistant') {
+          final ta = await supabase
+              .from('ta')
+              .select('fullname')
+              .eq('tasnn', userId)
+              .maybeSingle();
+          fullName = ta?['fullname'] ?? '';
+        }
+      }
+
+      // ✅ STEP 4: LOG SUCCESSFUL LOGIN
+      await SystemLogger.logLogin(
+        userId: entityId,
+        userType: userTypeForDb,
+        userName: fullName,
+      );
+
+      // ✅ STEP 5: Save session
+      await AuthService.saveLoginSession(
+        email: userEmail,
+        role: widget.role,
+        userId: entityId,
+        userName: fullName,
+        studentId: entityId,
+      );
+
+      // Remember Me
+      if (_rememberMe) {
+        await AuthService.saveRememberedEmail(
+          email: loginInput,
+          role: widget.role,
+        );
+      }
+
+      if (!mounted) return;
+
       setState(() {
-        _isLoading = true;
+        _isLoading = false;
       });
 
-      try {
-        final email = _emailController.text.trim();
-        final password = _passwordController.text;
-        final supabase = SupabaseManager.client;
-
-        print('🔐 Attempting login for: $email');
-
-        final userResponse = await supabase
-            .from('User')
-            .select('UserId, Email, PasswordHash, FullName, Role, IsActive')
-            .eq('Email', email)
-            .maybeSingle();
-
-        if (userResponse == null) {
-          throw Exception('Invalid email or password.');
-        }
-
-        print('✅ User found: ${userResponse['FullName']}');
-
-        final storedPasswordHash = userResponse['PasswordHash'];
-
-        if (storedPasswordHash != password) {
-          throw Exception('Invalid email or password.');
-        }
-
-        if (userResponse['IsActive'] != true) {
-          throw Exception('Your account is inactive. Please contact support.');
-        }
-
-        final userRole = userResponse['Role'].toString().toLowerCase();
-        if (widget.role == 'student' && userRole != 'student') {
-          throw Exception('This email is not registered as a student.');
-        } else if (widget.role == 'faculty' && userRole != 'faculty') {
-          throw Exception('This email is not registered as faculty.');
-        } else if (widget.role == 'teacher_assistant' &&
-            userRole != 'teacherassistant') {
-          throw Exception(
-              'This email is not registered as a teacher assistant.');
-        }
-
-        final userId = userResponse['UserId'];
-
-        if (widget.role == 'student') {
-          final studentResponse = await supabase
-              .from('Student')
-              .select('StudentId, StudentCode')
-              .eq('UserId', userId)
-              .maybeSingle();
-
-          if (studentResponse == null) {
-            throw Exception('Student record not found.');
-          }
-
-          final studentId = studentResponse['StudentId'].toString();
-          final studentName = userResponse['FullName'];
-
-          print('✅ Student authenticated: $studentName (ID: $studentId)');
-
-          await AuthService.saveLoginSession(
-            email: email,
-            role: 'student',
-            userId: userId,
-            userName: studentName,
-            studentId: studentId,
-          );
-
-          // Save email if Remember Me is checked
-          if (_rememberMe) {
-            await AuthService.saveRememberedEmail(
-                email: email, role: 'student');
-          } else {
-            await AuthService.clearRememberedEmail('student');
-          }
-
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-
-            Navigator.pushReplacement(
-              context,
-              AdvancedSlidePageRoute(
-                page: const StudentView(),
-                direction: SlideDirection.left,
-              ),
-            );
-          }
-        } else if (widget.role == 'faculty') {
-          final facultyResponse = await supabase
-              .from('Faculty')
-              .select('FacultyId, EmployeeCode, AcademicTitle')
-              .eq('UserId', userId)
-              .maybeSingle();
-
-          if (facultyResponse == null) {
-            throw Exception('Faculty record not found.');
-          }
-
-          final facultyId = facultyResponse['FacultyId'].toString();
-          final facultyName = userResponse['FullName'];
-
-          print('✅ Faculty authenticated: $facultyName (ID: $facultyId)');
-
-          await AuthService.saveLoginSession(
-            email: email,
-            role: 'faculty',
-            userId: userId,
-            userName: facultyName,
-            studentId: facultyId,
-          );
-
-          // Save email if Remember Me is checked
-          if (_rememberMe) {
-            await AuthService.saveRememberedEmail(
-                email: email, role: 'faculty');
-          } else {
-            await AuthService.clearRememberedEmail('faculty');
-          }
-
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-
-            Navigator.pushReplacement(
-              context,
-              AdvancedSlidePageRoute(
-                page: TeacherView(
-                  facultyName: facultyName,
-                  facultyEmail: email,
-                  facultyId: facultyId,
-                  role: 'faculty',
-                ),
-                direction: SlideDirection.left,
-              ),
-            );
-          }
-        } else if (widget.role == 'teacher_assistant') {
-          final taResponse = await supabase
-              .from('TeacherAssistant')
-              .select('TAId, EmployeeCode')
-              .eq('UserId', userId)
-              .maybeSingle();
-
-          if (taResponse == null) {
-            throw Exception('Teacher Assistant record not found.');
-          }
-
-          final taId = taResponse['TAId'].toString();
-          final taName = userResponse['FullName'];
-
-          print('✅ TA authenticated: $taName (ID: $taId)');
-
-          await AuthService.saveLoginSession(
-            email: email,
-            role: 'teacher_assistant',
-            userId: userId,
-            userName: taName,
-            studentId: taId,
-          );
-
-          // Save email if Remember Me is checked
-          if (_rememberMe) {
-            await AuthService.saveRememberedEmail(
-                email: email, role: 'teacher_assistant');
-          } else {
-            await AuthService.clearRememberedEmail('teacher_assistant');
-          }
-
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-
-            Navigator.pushReplacement(
-              context,
-              AdvancedSlidePageRoute(
-                page: TeacherView(
-                  facultyName: taName,
-                  facultyEmail: email,
-                  facultyId: taId,
-                  role: 'teacher_assistant',
-                ),
-                direction: SlideDirection.left,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        print('❌ Login error: $e');
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      e.toString().replaceAll('Exception: ', ''),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: AppColors.accentRed,
-              duration: const Duration(seconds: 4),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              margin: const EdgeInsets.all(16),
-              action: SnackBarAction(
-                label: 'Retry',
-                textColor: Colors.white,
-                onPressed: () {
-                  _handleLogin();
-                },
-              ),
+      // ✅ STEP 6: Navigate to dashboard
+      if (widget.role == 'student') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const StudentView()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherView(
+              facultyName: fullName,
+              facultyEmail: userEmail,
+              facultyId: entityId,
+              role: widget.role,
             ),
-          );
-        }
+          ),
+        );
+      }
+
+    } catch (e) {
+      print('❌ Login error: $e');
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -441,32 +401,19 @@ class _LoginScreenState extends State<LoginScreen>
         final bool isDesktop = constraints.maxWidth >= 1000;
 
         final size = MediaQuery.of(context).size;
-        final double logoHeight = size.height * 0.35; // Match WelcomeScreen
-        // 🔹 Responsive values
-        final double horizontalPadding = isDesktop
-            ? 40
-            : isTablet
-                ? 32
-                : 24;
-        final double cardMaxWidth = isDesktop
-            ? 650
-            : isTablet
-                ? 560
-                : 500;
+        final double logoHeight = size.height * 0.35;
+        final double horizontalPadding =
+        isDesktop ? 40 : (isTablet ? 32 : 24);
+        final double cardMaxWidth =
+        isDesktop ? 650 : (isTablet ? 560 : 500);
 
-        final double roleTitleSize = isDesktop
-            ? 38
-            : isTablet
-                ? 34
-                : 32;
-        final double subtitleSize = isDesktop
-            ? 20
-            : isTablet
-                ? 18
-                : 17;
+        final double roleTitleSize =
+        isDesktop ? 38 : (isTablet ? 34 : 32);
+        final double subtitleSize =
+        isDesktop ? 20 : (isTablet ? 18 : 17);
 
         return Scaffold(
-          resizeToAvoidBottomInset: true, // ⚡ Important for keyboard
+          resizeToAvoidBottomInset: true,
           appBar: PreferredSize(
             preferredSize: const Size.fromHeight(60),
             child: Container(
@@ -526,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // 🔹 Logo
+                          // Logo
                           AnimatedBuilder(
                             animation: _logoScaleAnimation,
                             builder: (context, child) {
@@ -536,12 +483,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   height: logoHeight,
                                   padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
-                                    color: Colors.transparent, // No background
-                                    borderRadius: BorderRadius.circular(
-                                        28), // optional: keep rounded corners
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(28),
                                     border: Border.all(
-                                      color: Colors
-                                          .transparent, // optional: remove border if not needed
+                                      color: Colors.transparent,
                                       width: 0,
                                     ),
                                   ),
@@ -563,7 +508,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                           SizedBox(height: isTablet ? 32 : 24),
 
-                          // 🔹 Role Title
+                          // Role Title
                           FadeTransition(
                             opacity: _textOpacityAnimation,
                             child: SlideTransition(
@@ -580,29 +525,7 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 12),
 
-                          // 🔹 Welcome
-                          // FadeTransition(
-                          //   opacity: _textOpacityAnimation,
-                          //   child: SlideTransition(
-                          //     position: _textSlideAnimation,
-                          //     child: ShaderMask(
-                          //       shaderCallback: (bounds) => AppColors.primaryGradient.createShader(
-                          //         Rect.fromLTWH(0, 0, bounds.width, bounds.height),
-                          //       ),
-                          //       blendMode: BlendMode.srcIn,
-                          //       child: Text(
-                          //         'Welcome Back',
-                          //         style: theme.textTheme.displayMedium?.copyWith(
-                          //           fontWeight: FontWeight.w900,
-                          //           fontSize: welcomeSize,
-                          //         ),
-                          //       ),
-                          //     ),
-                          //   ),
-                          // ),
-                          const SizedBox(height: 12),
-
-                          // 🔹 Subtitle
+                          // Subtitle
                           FadeTransition(
                             opacity: _textOpacityAnimation,
                             child: SlideTransition(
@@ -619,33 +542,33 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 24),
 
-                          // 🔹 Form
+                          // Form
                           Form(
                             key: _formKey,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Email
+                                // ID Field (بدل Email)
                                 AnimatedBuilder(
                                   animation: _fieldAnimation,
                                   builder: (context, child) {
                                     return Transform.translate(
                                       offset: Offset(
-                                          0, 20 * (1 - _fieldAnimation.value)),
+                                          0,
+                                          20 * (1 - _fieldAnimation.value)),
                                       child: Opacity(
                                         opacity: _fieldAnimation.value,
                                         child: AnimatedTextField(
-                                          controller: _emailController,
-                                          keyboardType:
-                                              TextInputType.emailAddress,
-                                          hintText: 'Email',
-                                          prefixIcon: Icons.email_outlined,
+                                          controller: _idController,
+                                          keyboardType: TextInputType.text,
+                                          hintText: _idHint,
+                                          prefixIcon: Icons.badge_outlined,
                                           primaryColor: AppColors.primaryBlue,
                                           validator: (value) {
-                                            if (value == null || value.isEmpty)
-                                              return 'Please enter your email';
-                                            if (!_isValidMTIEmail(value))
-                                              return 'Invalid MTI email format';
+                                            if (value == null ||
+                                                value.trim().isEmpty) {
+                                              return 'Please enter your ID';
+                                            }
                                             return null;
                                           },
                                         ),
@@ -661,7 +584,8 @@ class _LoginScreenState extends State<LoginScreen>
                                   builder: (context, child) {
                                     return Transform.translate(
                                       offset: Offset(
-                                          0, 20 * (1 - _fieldAnimation.value)),
+                                          0,
+                                          20 * (1 - _fieldAnimation.value)),
                                       child: Opacity(
                                         opacity: _fieldAnimation.value,
                                         child: AnimatedTextField(
@@ -670,26 +594,29 @@ class _LoginScreenState extends State<LoginScreen>
                                           hintText: 'Password',
                                           prefixIcon: Icons.lock_outline,
                                           primaryColor:
-                                              AppColors.secondaryOrange,
+                                          AppColors.secondaryOrange,
                                           suffixIcon: IconButton(
                                             icon: Icon(
                                               _isPasswordVisible
                                                   ? Icons.visibility_rounded
                                                   : Icons
-                                                      .visibility_off_rounded,
-                                              color:
-                                                  AppColors.tertiaryLightGray,
+                                                  .visibility_off_rounded,
+                                              color: AppColors
+                                                  .tertiaryLightGray,
                                               size: 18,
                                             ),
                                             onPressed: () => setState(() =>
-                                                _isPasswordVisible =
-                                                    !_isPasswordVisible),
+                                            _isPasswordVisible =
+                                            !_isPasswordVisible),
                                           ),
                                           validator: (value) {
-                                            if (value == null || value.isEmpty)
+                                            if (value == null ||
+                                                value.isEmpty) {
                                               return 'Please enter your password';
-                                            if (value.length < 6)
+                                            }
+                                            if (value.length < 6) {
                                               return 'Password must be at least 6 characters';
+                                            }
                                             return null;
                                           },
                                         ),
@@ -699,19 +626,20 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 const SizedBox(height: 10),
 
-                                // Remember Me + Forgot Password
+                                // Remember Me + Reset Password
                                 AnimatedBuilder(
                                   animation: _fieldAnimation,
                                   builder: (context, child) {
                                     return Transform.translate(
                                       offset: Offset(
-                                          0, 20 * (1 - _fieldAnimation.value)),
+                                          0,
+                                          20 * (1 - _fieldAnimation.value)),
                                       child: Opacity(
                                         opacity: _fieldAnimation.value,
                                         child: Wrap(
                                           alignment: WrapAlignment.spaceBetween,
                                           crossAxisAlignment:
-                                              WrapCrossAlignment.center,
+                                          WrapCrossAlignment.center,
                                           children: [
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
@@ -720,18 +648,18 @@ class _LoginScreenState extends State<LoginScreen>
                                                   value: _rememberMe,
                                                   onChanged: (value) =>
                                                       setState(() =>
-                                                          _rememberMe =
-                                                              value ?? false),
+                                                      _rememberMe =
+                                                          value ?? false),
                                                   activeColor:
-                                                      AppColors.primaryBlue,
+                                                  AppColors.primaryBlue,
                                                   checkColor: Colors.white,
                                                   visualDensity:
-                                                      VisualDensity.compact,
+                                                  VisualDensity.compact,
                                                 ),
                                                 GestureDetector(
                                                   onTap: () => setState(() =>
-                                                      _rememberMe =
-                                                          !_rememberMe),
+                                                  _rememberMe =
+                                                  !_rememberMe),
                                                   child: Text(
                                                     'Remember Me',
                                                     style: theme
@@ -740,7 +668,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                       color: AppColors
                                                           .tertiaryBlack,
                                                       fontWeight:
-                                                          FontWeight.w600,
+                                                      FontWeight.w600,
                                                       fontSize: 13,
                                                     ),
                                                   ),
@@ -752,11 +680,14 @@ class _LoginScreenState extends State<LoginScreen>
                                                 Navigator.push(
                                                   context,
                                                   AdvancedSlidePageRoute(
-                                                    page: ForgotPasswordScreen(
-                                                        roleName:
-                                                            widget.roleName),
+                                                    page:
+                                                    ForgotPasswordScreen(
+                                                      role: widget.role,
+                                                      roleName:
+                                                      widget.roleName,
+                                                     ),
                                                     direction:
-                                                        SlideDirection.right,
+                                                    SlideDirection.right,
                                                   ),
                                                 );
                                               },
@@ -766,8 +697,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                 color: AppColors.primaryBlue,
                                               ),
                                               label: Text(
-                                                'Forgot Password?',
-                                                style: theme.textTheme.bodySmall
+                                                'Reset Password',
+                                                style: theme
+                                                    .textTheme.bodySmall
                                                     ?.copyWith(
                                                   color: AppColors.primaryBlue,
                                                   fontWeight: FontWeight.w700,
@@ -789,30 +721,31 @@ class _LoginScreenState extends State<LoginScreen>
                                   builder: (context, child) {
                                     return Transform.translate(
                                       offset: Offset(
-                                          0, 20 * (1 - _fieldAnimation.value)),
+                                          0,
+                                          20 * (1 - _fieldAnimation.value)),
                                       child: Opacity(
                                         opacity: _fieldAnimation.value,
                                         child: HoverScaleWidget(
                                           scale: 1.02,
                                           duration:
-                                              const Duration(milliseconds: 250),
+                                          const Duration(milliseconds: 250),
                                           onTap:
-                                              _isLoading ? null : _handleLogin,
+                                          _isLoading ? null : _handleLogin,
                                           child: Container(
                                             width: double.infinity,
                                             height: isTablet ? 50 : 46,
                                             decoration: BoxDecoration(
                                               gradient:
-                                                  AppColors.primaryGradient,
+                                              AppColors.primaryGradient,
                                               borderRadius:
-                                                  BorderRadius.circular(
-                                                      isTablet ? 20 : 18),
+                                              BorderRadius.circular(
+                                                  isTablet ? 20 : 18),
                                               boxShadow: [
                                                 BoxShadow(
                                                   color: AppColors.primaryBlue
                                                       .withOpacity(0.4),
                                                   blurRadius:
-                                                      isTablet ? 16 : 12,
+                                                  isTablet ? 16 : 12,
                                                   offset: Offset(
                                                       0, isTablet ? 6 : 4),
                                                   spreadRadius: 1.5,
@@ -826,40 +759,43 @@ class _LoginScreenState extends State<LoginScreen>
                                               icon: _isLoading
                                                   ? const SizedBox.shrink()
                                                   : Icon(
-                                                      Icons.login_rounded,
-                                                      size: isTablet ? 18 : 16,
-                                                      color: Colors.white,
-                                                    ),
+                                                Icons.login_rounded,
+                                                size: isTablet ? 18 : 16,
+                                                color: Colors.white,
+                                              ),
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor:
-                                                    Colors.transparent,
+                                                Colors.transparent,
                                                 foregroundColor: Colors.white,
                                                 shadowColor: Colors.transparent,
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(
-                                                          isTablet ? 20 : 18),
+                                                  BorderRadius.circular(
+                                                      isTablet ? 20 : 18),
                                                 ),
-                                                padding: EdgeInsets.symmetric(
+                                                padding:
+                                                const EdgeInsets.symmetric(
                                                     horizontal: 16,
                                                     vertical: 10),
                                               ),
                                               label: _isLoading
                                                   ? LoadingAnimation(
-                                                      size: 16,
-                                                      color: Colors.white)
+                                                size: 16,
+                                                color: Colors.white,
+                                              )
                                                   : Text(
-                                                      'Log In',
-                                                      style: theme
-                                                          .textTheme.bodyMedium
-                                                          ?.copyWith(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        fontSize:
-                                                            isTablet ? 16 : 14,
-                                                      ),
-                                                    ),
+                                                'Log In',
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight:
+                                                  FontWeight.w700,
+                                                  fontSize: isTablet
+                                                      ? 16
+                                                      : 14,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),

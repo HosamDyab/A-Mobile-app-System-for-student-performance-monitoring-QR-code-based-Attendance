@@ -1,18 +1,16 @@
-import 'package:flutter/material.dart';
+// student_card_widget.dart
 
+import 'package:flutter/material.dart';
+import '../../../../shared/utils/app_colors.dart';
 import '../../../models/student_entity.dart';
 
-/// Student Card Widget - Modern, theme-aware student card.
-///
-/// Features:
-/// - Avatar with initials
-/// - Student info (name, major, level, GPA)
-/// - Action buttons (view, edit, message)
-/// - Theme-aware styling (light/dark mode)
 class StudentCard extends StatelessWidget {
   final StudentEntity student;
 
-  const StudentCard({super.key, required this.student});
+  const StudentCard({
+    super.key,
+    required this.student,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,204 +19,335 @@ class StudentCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: isDark ? colorScheme.surface : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(
-          color: colorScheme.outline.withOpacity(0.1),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          _buildAvatar(colorScheme, isDark),
-          const SizedBox(width: 14),
-
-          // Student Info
-          Expanded(
-            child: _buildStudentInfo(colorScheme, isDark),
-          ),
-
-          // Action Buttons
-          _buildActionButtons(colorScheme),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar(ColorScheme colorScheme, bool isDark) {
-    final name = student.fullName ?? student.studentCode;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colorScheme.primary,
-            colorScheme.primary.withOpacity(0.7),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withOpacity(0.3),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: AppColors.primaryBlue.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Center(
-        child: Text(
-          initial,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStudentInfo(ColorScheme colorScheme, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Name
-        Text(
-          student.fullName ?? student.studentCode,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: colorScheme.onSurface,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 6),
-
-        // Major and Level Row
-        Row(
-          children: [
-            // Major Chip
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withOpacity(isDark ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                student.major,
-                style: TextStyle(
-                  color: colorScheme.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Level
-            Text(
-              student.academicLevel,
-              style: TextStyle(
-                color: colorScheme.onSurface.withOpacity(0.6),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-
-        // GPA
-        Row(
-          children: [
-            Icon(
-              Icons.stars_rounded,
-              size: 14,
-              color: colorScheme.secondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'GPA: ${student.currentGpa.toStringAsFixed(2)}',
-              style: TextStyle(
-                color: colorScheme.secondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(ColorScheme colorScheme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildActionButton(
-          icon: Icons.visibility_rounded,
-          color: colorScheme.primary,
-          onPressed: () {
-            // TODO: Navigate to student details
-          },
-          tooltip: 'View Details',
-        ),
-        _buildActionButton(
-          icon: Icons.edit_rounded,
-          color: colorScheme.secondary,
-          onPressed: () {
-            // TODO: Edit student
-          },
-          tooltip: 'Edit',
-        ),
-        _buildActionButton(
-          icon: Icons.message_rounded,
-          color: Colors.blue,
-          onPressed: () {
-            // TODO: Message student
-          },
-          tooltip: 'Message',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onPressed,
-    required String tooltip,
-  }) {
-    return Tooltip(
-      message: tooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Navigate to student details or show bottom sheet
+            _showStudentDetails(context);
+          },
           child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(
-              icon,
-              color: color,
-              size: 18,
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                // Avatar
+                _buildAvatar(isDark),
+                const SizedBox(width: 16),
+
+                // Student Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name
+                      Text(
+                        student.fullName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+
+                      // Email
+                      Text(
+                        student.email,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Level, Major, ID
+                      Row(
+                        children: [
+                          _buildInfoChip(
+                            student.academicLevelString,
+                            AppColors.primaryBlue,
+                            isDark,
+                          ),
+                          const SizedBox(width: 8),
+                          if (student.major != null)
+                            _buildInfoChip(
+                              student.major!,
+                              AppColors.accentPurple,
+                              isDark,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // GPA Badge
+                _buildGpaBadge(isDark),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAvatar(bool isDark) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryBlue.withOpacity(isDark ? 0.3 : 0.2),
+            AppColors.accentPurple.withOpacity(isDark ? 0.25 : 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Center(
+        child: Text(
+          _getInitials(student.fullName),
+          style: TextStyle(
+            color: AppColors.primaryBlue,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, Color color, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGpaBadge(bool isDark) {
+    final gpa = student.currentGpa;
+    final gpaText = gpa != null ? gpa.toStringAsFixed(2) : 'N/A';
+    final gpaColor = _getGpaColor(gpa);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: gpaColor.withOpacity(isDark ? 0.2 : 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: gpaColor.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'GPA',
+            style: TextStyle(
+              fontSize: 10,
+              color: gpaColor.withOpacity(0.7),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            gpaText,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: gpaColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getGpaColor(double? gpa) {
+    if (gpa == null) return AppColors.tertiaryLightGray;
+    if (gpa >= 3.5) return AppColors.accentGreen;
+    if (gpa >= 3.0) return AppColors.primaryBlue;
+    if (gpa >= 2.5) return AppColors.secondaryBlue;
+    return AppColors.accentRed;
+  }
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+    return '${parts[0].substring(0, 1)}${parts[parts.length - 1].substring(0, 1)}'.toUpperCase();
+  }
+
+  void _showStudentDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Student Name
+            Text(
+              student.fullName,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Email
+            Row(
+              children: [
+                Icon(Icons.email_outlined,
+                    size: 16,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6)),
+                const SizedBox(width: 8),
+                Text(
+                  student.email,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Details Grid
+            _buildDetailRow('Student ID', student.studentId, context),
+            const SizedBox(height: 12),
+            _buildDetailRow(
+                'Level', student.academicLevelString, context),
+            const SizedBox(height: 12),
+            if (student.major != null)
+              _buildDetailRow('Major', student.major!, context),
+            if (student.major != null) const SizedBox(height: 12),
+            _buildDetailRow(
+              'GPA',
+              student.currentGpa?.toStringAsFixed(2) ?? 'N/A',
+              context,
+            ),
+            const SizedBox(height: 12),
+            _buildDetailRow(
+              'Credits Earned',
+              '${student.totalCreditHoursEarned} hrs',
+              context,
+            ),
+            if (student.entryYear != null) const SizedBox(height: 12),
+            if (student.entryYear != null)
+              _buildDetailRow('Entry Year', student.entryYear!, context),
+            const SizedBox(height: 24),
+
+            // Close Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color:
+            Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

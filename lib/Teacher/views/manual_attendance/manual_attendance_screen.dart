@@ -7,13 +7,13 @@ import '../widgets/custom_app_bar.dart';
 
 /// Manual Attendance Screen - Record attendance manually for students.
 ///
-/// Features:
-/// - Course selection dropdown
-/// - Date picker with modern design
-/// - Status selection (Present, Absent, Late, Excused)
-/// - Student list with multi-select and search
-/// - Theme-aware styling (light/dark mode)
-/// - Fully responsive and adaptive
+/// FIXES:
+/// 1. Proper status storage (Present/Absent only, matching ispresent boolean)
+/// 2. Week number based on academic year (FALL = weeks 1-17, SPRING = weeks 1-17)
+/// 3. Time information properly set from course schedule
+/// 4. Date selection restricted to scheduled course days only
+/// 5. Proper upsert to handle duplicates
+/// 6. Clear academic year context
 class ManualAttendanceScreen extends StatefulWidget {
   final String facultyId;
   final String role;
@@ -37,6 +37,10 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
   List<String> _selectedStudents = [];
 
   String? _selectedCourse;
+  String? _selectedAcademicYear;
+  String? _selectedSemester;
+  Map<String, dynamic>? _selectedCourseSchedule;
+
   DateTime _selectedDate = DateTime.now();
   String _selectedStatus = 'Present';
   bool _isLoading = false;
@@ -62,9 +66,18 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
     try {
       if (widget.role == 'faculty') {
         final response = await _supabase
-            .from('LectureCourseOffering')
-            .select('*, Course(*)')
-            .eq('FacultyId', widget.facultyId);
+            .from('lecturecourseoffering')
+            .select('''
+              lectureofferingid, 
+              coursecode, 
+              academicyear, 
+              semester,
+              slotid,
+              roomid,
+              course(coursecode, coursename),
+              timeslot(slotid, dayofweek, starttime, endtime)
+            ''')
+            .eq('facultysnn', widget.facultyId);
 
         setState(() {
           _courses = List<Map<String, dynamic>>.from(response as List);
@@ -72,9 +85,19 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         });
       } else {
         final response = await _supabase
-            .from('SectionCourseOffering')
-            .select('*, Course(*)')
-            .eq('TAId', widget.facultyId);
+            .from('sectionta')
+            .select('''
+              sectionofferingid,
+              sectioncourseoffering(
+                sectionofferingid,
+                coursecode,
+                slotid,
+                roomid,
+                course(coursecode, coursename),
+                timeslot(slotid, dayofweek, starttime, endtime)
+              )
+            ''')
+            .eq('tasnn', widget.facultyId);
 
         setState(() {
           _courses = List<Map<String, dynamic>>.from(response as List);
@@ -100,81 +123,25 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
 
       if (widget.role == 'faculty') {
         try {
-          final sectionsResponse = await _supabase
-              .from('SectionCourseOffering')
-              .select('SectionOfferingId')
-              .eq('LectureOfferingId', _selectedCourse!);
+          final studentsResponse = await _supabase
+              .from('lectureenrollment')
+              .select('studentid, student(studentid, fullname, email)')
+              .eq('lectureofferingid', _selectedCourse!);
 
-          final sectionIds = (sectionsResponse as List)
-              .map((s) => s['SectionOfferingId'])
-              .whereType<dynamic>()
-              .toList();
-
-          if (sectionIds.isNotEmpty) {
-            final studentsResponse = await _supabase
-                .from('StudentSection')
-                .select(
-                'StudentId, Student(StudentId, StudentCode, User(FullName))')
-                .inFilter('SectionOfferingId', sectionIds);
-
-            studentsList =
-            List<Map<String, dynamic>>.from(studentsResponse as List);
-          }
+          studentsList = List<Map<String, dynamic>>.from(studentsResponse as List);
         } catch (e) {
-          debugPrint('Section query failed, trying direct student load: $e');
-        }
-
-        if (studentsList.isEmpty) {
-          try {
-            final allStudentsResponse = await _supabase
-                .from('Student')
-                .select('StudentId, StudentCode, User(FullName)')
-                .limit(100);
-
-            studentsList = (allStudentsResponse as List).map((s) {
-              return {
-                'StudentId': s['StudentId'],
-                'Student': {
-                  'StudentId': s['StudentId'],
-                  'StudentCode': s['StudentCode'],
-                  'User': s['User'],
-                },
-              };
-            }).toList();
-          } catch (e) {
-            debugPrint('Direct student load failed: $e');
-          }
+          debugPrint('Lecture enrollment query failed: $e');
         }
       } else {
         try {
           final response = await _supabase
-              .from('StudentSection')
-              .select(
-              'StudentId, Student(StudentId, StudentCode, User(FullName))')
-              .eq('SectionOfferingId', _selectedCourse!);
+              .from('sectionenrollment')
+              .select('studentid, student(studentid, fullname, email)')
+              .eq('sectionofferingid', _selectedCourse!);
 
           studentsList = List<Map<String, dynamic>>.from(response as List);
         } catch (e) {
-          debugPrint('TA section query failed: $e');
-          try {
-            final allStudentsResponse = await _supabase
-                .from('Student')
-                .select('StudentId, StudentCode, User(FullName)')
-                .limit(100);
-
-            studentsList = (allStudentsResponse as List).map((s) {
-              return {
-                'StudentId': s['StudentId'],
-                'Student': {
-                  'StudentId': s['StudentId'],
-                  'StudentCode': s['StudentCode'],
-                  'User': s['User'],
-                },
-              };
-            }).toList();
-          } catch (e2) {
-            debugPrint('Fallback student load failed: $e2');
-          }
+          debugPrint('Section enrollment query failed: $e');
         }
       }
 
@@ -199,17 +166,85 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         _filteredStudents = _allStudents;
       } else {
         _filteredStudents = _allStudents.where((student) {
-          final studentData = student['Student'] as Map<String, dynamic>?;
-          final name = (studentData?['User']?['FullName'] ?? '')
-              .toString()
-              .toLowerCase();
-          final code =
-          (studentData?['StudentCode'] ?? '').toString().toLowerCase();
+          final studentData = student['student'] as Map<String, dynamic>?;
+          final name = (studentData?['fullname'] ?? '').toString().toLowerCase();
+          final email = (studentData?['email'] ?? '').toString().toLowerCase();
           final searchLower = query.toLowerCase();
-          return name.contains(searchLower) || code.contains(searchLower);
+          return name.contains(searchLower) || email.contains(searchLower);
         }).toList();
       }
     });
+  }
+
+  int _calculateWeekNumber(DateTime date, String semester) {
+    // Academic year calendar:
+    // FALL semester: September-December (weeks 1-17)
+    // SPRING semester: January-May (weeks 1-17)
+
+    if (semester == 'FALL') {
+      // Fall semester starts in September
+      final semesterStart = DateTime(date.year, 9, 1);
+      if (date.isBefore(semesterStart)) {
+        // If date is before September, it might be summer or previous spring
+        return 1;
+      }
+      final daysDiff = date.difference(semesterStart).inDays;
+      return (daysDiff / 7).floor() + 1;
+    } else if (semester == 'SPRING') {
+      // Spring semester starts in January
+      final semesterStart = DateTime(date.year, 1, 1);
+      final daysDiff = date.difference(semesterStart).inDays;
+      return (daysDiff / 7).floor() + 1;
+    } else {
+      // BOTH or unknown - default calculation
+      final yearStart = DateTime(date.year, 1, 1);
+      final daysDiff = date.difference(yearStart).inDays;
+      return (daysDiff / 7).floor() + 1;
+    }
+  }
+
+  bool _isDateMatchingSchedule(DateTime date) {
+    if (_selectedCourseSchedule == null) return true;
+
+    final timeslot = _selectedCourseSchedule!['timeslot'] as Map<String, dynamic>?;
+    if (timeslot == null) return true;
+
+    final scheduledDay = timeslot['dayofweek']?.toString().toUpperCase();
+    if (scheduledDay == null) return true;
+
+    // Map DateTime weekday to day name
+    final weekdayNames = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+    final selectedDay = weekdayNames[date.weekday - 1];
+
+    return scheduledDay == selectedDay;
+  }
+
+  String _getScheduledDayName() {
+    if (_selectedCourseSchedule == null) return 'N/A';
+
+    final timeslot = _selectedCourseSchedule!['timeslot'] as Map<String, dynamic>?;
+    if (timeslot == null) return 'N/A';
+
+    final dayOfWeek = timeslot['dayofweek']?.toString();
+    if (dayOfWeek == null) return 'N/A';
+
+    // Capitalize first letter, rest lowercase
+    return dayOfWeek[0].toUpperCase() + dayOfWeek.substring(1).toLowerCase();
+  }
+
+  DateTime _findMostRecentScheduledDate() {
+    final now = DateTime.now();
+
+    // Start from today and go backwards to find the most recent matching day
+    for (int i = 0; i <= 7; i++) {
+      final checkDate = now.subtract(Duration(days: i));
+      if (_isDateMatchingSchedule(checkDate)) {
+        return checkDate;
+      }
+    }
+
+    // Fallback to today if no match found in the last week
+    return now;
   }
 
   Future<void> _submitAttendance() async {
@@ -223,188 +258,171 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
     try {
       final dateStr = _selectedDate.toIso8601String().split('T')[0];
       final isFaculty = widget.role == 'faculty';
+      final isPresentStatus = _selectedStatus == 'Present';
+      final weekNumber = _calculateWeekNumber(_selectedDate, _selectedSemester ?? 'FALL');
+
+      debugPrint('=== SUBMIT ATTENDANCE DEBUG ===');
+      debugPrint('Role: ${widget.role}');
+      debugPrint('Selected Course: $_selectedCourse');
+      debugPrint('Selected Date: $dateStr');
+      debugPrint('Week Number: $weekNumber');
+      debugPrint('Semester: $_selectedSemester');
+      debugPrint('Status: $_selectedStatus (ispresent: $isPresentStatus)');
+      debugPrint('Selected Students: $_selectedStudents');
 
       String finalInstanceId;
 
       if (isFaculty) {
-        // === FACULTY: Use LectureInstance and LectureQR ===
+        // === FACULTY: Use lectureinstance and lectureattendance ===
 
-        // Check if lecture instance already exists
-        final existingInstance = await _supabase
-            .from('LectureInstance')
-            .select('InstanceId')
-            .eq('LectureOfferingId', _selectedCourse!)
-            .eq('MeetingDate', dateStr)
-            .eq('StartTime', '00:00:00')
-            .maybeSingle();
+        // Get time information from course schedule
+        TimeOfDay? startTime;
+        TimeOfDay? endTime;
 
-        if (existingInstance == null) {
-          // Create new lecture instance
-          final insertResponse = await _supabase
-              .from('LectureInstance')
-              .insert({
-            'LectureOfferingId': _selectedCourse,
-            'MeetingDate': dateStr,
-            'StartTime': '00:00:00',
-            'EndTime': '23:59:59',
-            'Topic': 'Manual Attendance Entry',
-            'IsCancelled': false,
-          })
-              .select('InstanceId')
-              .single();
+        if (_selectedCourseSchedule != null) {
+          final timeslot = _selectedCourseSchedule!['timeslot'] as Map<String, dynamic>?;
+          if (timeslot != null) {
+            final startTimeStr = timeslot['starttime']?.toString();
+            final endTimeStr = timeslot['endtime']?.toString();
 
-          finalInstanceId = insertResponse['InstanceId'];
-        } else {
-          finalInstanceId = existingInstance['InstanceId'];
-        }
+            if (startTimeStr != null) {
+              final parts = startTimeStr.split(':');
+              startTime = TimeOfDay(
+                hour: int.parse(parts[0]),
+                minute: int.parse(parts[1]),
+              );
+            }
 
-        // Check existing attendance for this lecture instance
-        final existingAttendance = await _supabase
-            .from('LectureQR')
-            .select('StudentId')
-            .eq('InstanceId', finalInstanceId)
-            .inFilter('StudentId', _selectedStudents);
-
-        final existingStudentIds = (existingAttendance as List)
-            .map((a) => a['StudentId'].toString())
-            .toSet();
-
-        // Insert new attendance records
-        final newStudents = _selectedStudents
-            .where((id) => !existingStudentIds.contains(id))
-            .toList();
-
-        if (newStudents.isNotEmpty) {
-          final attendanceRecords = newStudents.map((studentId) {
-            return {
-              'StudentId': studentId,
-              'InstanceId': finalInstanceId,
-              'ScanTime': DateTime.now().toIso8601String(),
-              'Status': _selectedStatus,
-            };
-          }).toList();
-
-          await _supabase.from('LectureQR').insert(attendanceRecords);
-        }
-
-        // Update existing attendance records
-        final updateStudents = _selectedStudents
-            .where((id) => existingStudentIds.contains(id))
-            .toList();
-
-        if (updateStudents.isNotEmpty) {
-          for (final studentId in updateStudents) {
-            await _supabase
-                .from('LectureQR')
-                .update({
-              'Status': _selectedStatus,
-              'ScanTime': DateTime.now().toIso8601String(),
-            })
-                .eq('InstanceId', finalInstanceId)
-                .eq('StudentId', studentId);
+            if (endTimeStr != null) {
+              final parts = endTimeStr.split(':');
+              endTime = TimeOfDay(
+                hour: int.parse(parts[0]),
+                minute: int.parse(parts[1]),
+              );
+            }
           }
         }
 
-        // Show success message
-        if (mounted) {
-          final totalRecorded = newStudents.length + updateStudents.length;
-          final message = newStudents.isNotEmpty && updateStudents.isNotEmpty
-              ? 'Recorded attendance for $totalRecorded students (${newStudents.length} new, ${updateStudents.length} updated)'
-              : newStudents.isNotEmpty
-              ? 'Attendance recorded for ${newStudents.length} students'
-              : 'Attendance updated for ${updateStudents.length} students';
+        // Check if lecture instance already exists
+        final existingInstance = await _supabase
+            .from('lectureinstance')
+            .select('linstanceid')
+            .eq('lectureofferingid', _selectedCourse!)
+            .eq('meetingdate', dateStr)
+            .maybeSingle();
 
-          _showSnackBar(message, isError: false);
+        if (existingInstance == null) {
+          // Create new lecture instance with time information
+          final generatedInstanceId = 'LI-$_selectedCourse-$dateStr';
+
+          final instanceData = <String, dynamic>{
+            'linstanceid': generatedInstanceId,
+            'lectureofferingid': _selectedCourse,
+            'meetingdate': dateStr,
+            'weeknumber': weekNumber,
+          };
+
+          // Add time information if available
+          if (startTime != null) {
+            instanceData['starttime'] = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}:00';
+          }
+          if (endTime != null) {
+            instanceData['endtime'] = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}:00';
+          }
+
+          final insertResponse = await _supabase
+              .from('lectureinstance')
+              .insert(instanceData)
+              .select('linstanceid')
+              .single();
+
+          finalInstanceId = insertResponse['linstanceid'];
+          debugPrint('Created new lecture instance: $finalInstanceId');
+        } else {
+          finalInstanceId = existingInstance['linstanceid'];
+          debugPrint('Using existing lecture instance: $finalInstanceId');
+        }
+
+        // Upsert attendance records (handles both insert and update)
+        final attendanceRecords = _selectedStudents.map((studentId) {
+          return {
+            'studentid': studentId,
+            'linstanceid': finalInstanceId,
+            'ispresent': isPresentStatus,
+            'scannedat': DateTime.now().toIso8601String(),
+          };
+        }).toList();
+
+        await _supabase.from('lectureattendance').upsert(
+          attendanceRecords,
+          onConflict: 'studentid,linstanceid',
+        );
+
+        debugPrint('Upserted ${attendanceRecords.length} attendance records');
+
+        if (mounted) {
+          _showSnackBar(
+            'Attendance recorded for ${attendanceRecords.length} students',
+            isError: false,
+          );
         }
       } else {
-        // === TA: Use SectionInstance and SectionQR ===
+        // === TA: Use sectioninstance and sectionattendance ===
 
         // Check if section instance already exists
         final existingInstance = await _supabase
-            .from('SectionInstance')
-            .select('InstanceId')
-            .eq('SectionOfferingId', _selectedCourse!)
-            .eq('MeetingDate', dateStr)
-            .eq('StartTime', '00:00:00')
+            .from('sectioninstance')
+            .select('sinstanceid')
+            .eq('sectionofferingid', _selectedCourse!)
+            .eq('meetingdate', dateStr)
             .maybeSingle();
 
         if (existingInstance == null) {
           // Create new section instance
+          final generatedSectionInstanceId = 'SI-$_selectedCourse-$dateStr';
+
+          final instanceData = {
+            'sinstanceid': generatedSectionInstanceId,
+            'sectionofferingid': _selectedCourse,
+            'meetingdate': dateStr,
+            'weeknumber': weekNumber,
+          };
+
           final insertResponse = await _supabase
-              .from('SectionInstance')
-              .insert({
-            'SectionOfferingId': _selectedCourse,
-            'MeetingDate': dateStr,
-            'StartTime': '00:00:00',
-            'EndTime': '23:59:59',
-            'Topic': 'Manual Attendance Entry',
-            'IsCancelled': false,
-          })
-              .select('InstanceId')
+              .from('sectioninstance')
+              .insert(instanceData)
+              .select('sinstanceid')
               .single();
 
-          finalInstanceId = insertResponse['InstanceId'];
+          finalInstanceId = insertResponse['sinstanceid'];
+          debugPrint('Created new section instance: $finalInstanceId');
         } else {
-          finalInstanceId = existingInstance['InstanceId'];
+          finalInstanceId = existingInstance['sinstanceid'];
+          debugPrint('Using existing section instance: $finalInstanceId');
         }
 
-        // Check existing attendance for this section instance
-        final existingAttendance = await _supabase
-            .from('SectionQR')
-            .select('StudentId')
-            .eq('InstanceId', finalInstanceId)
-            .inFilter('StudentId', _selectedStudents);
+        // Upsert attendance records
+        final attendanceRecords = _selectedStudents.map((studentId) {
+          return {
+            'studentid': studentId,
+            'sinstanceid': finalInstanceId,
+            'ispresent': isPresentStatus,
+            'scannedat': DateTime.now().toIso8601String(),
+          };
+        }).toList();
 
-        final existingStudentIds = (existingAttendance as List)
-            .map((a) => a['StudentId'].toString())
-            .toSet();
+        await _supabase.from('sectionattendance').upsert(
+          attendanceRecords,
+          onConflict: 'studentid,sinstanceid',
+        );
 
-        // Insert new attendance records
-        final newStudents = _selectedStudents
-            .where((id) => !existingStudentIds.contains(id))
-            .toList();
+        debugPrint('Upserted ${attendanceRecords.length} attendance records');
 
-        if (newStudents.isNotEmpty) {
-          final attendanceRecords = newStudents.map((studentId) {
-            return {
-              'StudentId': studentId,
-              'InstanceId': finalInstanceId,
-              'ScanTime': DateTime.now().toIso8601String(),
-              'Status': _selectedStatus,
-            };
-          }).toList();
-
-          await _supabase.from('SectionQR').insert(attendanceRecords);
-        }
-
-        // Update existing attendance records
-        final updateStudents = _selectedStudents
-            .where((id) => existingStudentIds.contains(id))
-            .toList();
-
-        if (updateStudents.isNotEmpty) {
-          for (final studentId in updateStudents) {
-            await _supabase
-                .from('SectionQR')
-                .update({
-              'Status': _selectedStatus,
-              'ScanTime': DateTime.now().toIso8601String(),
-            })
-                .eq('InstanceId', finalInstanceId)
-                .eq('StudentId', studentId);
-          }
-        }
-
-        // Show success message
         if (mounted) {
-          final totalRecorded = newStudents.length + updateStudents.length;
-          final message = newStudents.isNotEmpty && updateStudents.isNotEmpty
-              ? 'Recorded attendance for $totalRecorded students (${newStudents.length} new, ${updateStudents.length} updated)'
-              : newStudents.isNotEmpty
-              ? 'Attendance recorded for ${newStudents.length} students'
-              : 'Attendance updated for ${updateStudents.length} students';
-
-          _showSnackBar(message, isError: false);
+          _showSnackBar(
+            'Attendance recorded for ${attendanceRecords.length} students',
+            isError: false,
+          );
         }
       }
 
@@ -412,12 +430,17 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         _isLoading = false;
         _selectedStudents.clear();
       });
-    } catch (e) {
+
+      debugPrint('=== ATTENDANCE SUBMISSION COMPLETED ===');
+
+    } catch (e, stackTrace) {
       setState(() => _isLoading = false);
+      debugPrint('=== ERROR SUBMITTING ATTENDANCE ===');
+      debugPrint('Error: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         _showSnackBar('Error submitting attendance: $e', isError: true);
       }
-      debugPrint('Error submitting attendance: $e');
     }
   }
 
@@ -443,17 +466,17 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
   }
 
   String _getStudentName(Map<String, dynamic> student) {
-    final studentData = student['Student'] as Map<String, dynamic>?;
-    return studentData?['User']?['FullName'] ?? 'Unknown Student';
+    final studentData = student['student'] as Map<String, dynamic>?;
+    return studentData?['fullname'] ?? 'Unknown Student';
   }
 
   String _getStudentCode(Map<String, dynamic> student) {
-    final studentData = student['Student'] as Map<String, dynamic>?;
-    return studentData?['StudentCode'] ?? 'N/A';
+    final studentData = student['student'] as Map<String, dynamic>?;
+    return studentData?['studentid'] ?? 'N/A';
   }
 
   String _getStudentId(Map<String, dynamic> student) {
-    return student['StudentId']?.toString() ?? '';
+    return student['studentid']?.toString() ?? '';
   }
 
   @override
@@ -463,33 +486,29 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
 
-    // Responsive breakpoints
     final isSmallScreen = size.width < 360;
     final isCompact = size.width < 400;
     final isTablet = size.width >= 600;
     final isDesktop = size.width >= 1024;
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
-    // Adaptive padding
     final horizontalPadding = isDesktop ? 32.0 : (isTablet ? 24.0 : (isCompact ? 12.0 : 16.0));
     final verticalPadding = isTablet ? 24.0 : 16.0;
 
     return Scaffold(
       appBar: const CustomAppBar(title: 'Manual Attendance'),
       body: _isLoading
-          ? Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue))
+          ? Center(child: CircularProgressIndicator(color: AppColors.primaryBlue))
           : isLandscape && isTablet
-          ? _buildLandscapeLayout(context, colorScheme, isDark, isSmallScreen, isCompact, isTablet, isDesktop, horizontalPadding)
+          ? _buildLandscapeLayout(context, colorScheme, isDark, isSmallScreen, isCompact, horizontalPadding)
           : _buildPortraitLayout(context, colorScheme, isDark, isSmallScreen, isCompact, isTablet, isDesktop, horizontalPadding, verticalPadding),
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context, ColorScheme colorScheme, bool isDark, bool isSmallScreen, bool isCompact, bool isTablet, bool isDesktop, double horizontalPadding) {
+  Widget _buildLandscapeLayout(BuildContext context, ColorScheme colorScheme, bool isDark, bool isSmallScreen, bool isCompact, double horizontalPadding) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left panel - Course selection and date
         Expanded(
           flex: 2,
           child: SingleChildScrollView(
@@ -504,12 +523,14 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
                 _buildDateSelection(colorScheme, isDark, isSmallScreen, isCompact),
                 const SizedBox(height: 20),
                 _buildStatusSelection(colorScheme, isDark, isSmallScreen, isCompact),
+                if (_selectedCourseSchedule != null) ...[
+                  const SizedBox(height: 20),
+                  _buildScheduleInfo(colorScheme, isDark, isSmallScreen, isCompact),
+                ],
               ],
             ),
           ),
         ),
-
-        // Right panel - Student list
         Expanded(
           flex: 3,
           child: SingleChildScrollView(
@@ -526,9 +547,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
                   const SizedBox(height: 24),
                   _buildSubmitButton(isSmallScreen, isCompact),
                 ],
-                if (_selectedCourse != null &&
-                    _allStudents.isEmpty &&
-                    !_isLoading)
+                if (_selectedCourse != null && _allStudents.isEmpty && !_isLoading)
                   _buildEmptyStudentsState(colorScheme, isDark, isSmallScreen, isCompact),
               ],
             ),
@@ -557,6 +576,10 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
               _buildCourseSelection(colorScheme, isDark, isSmallScreen, isCompact),
               SizedBox(height: isTablet ? 24 : 20),
               _buildDateStatusRow(colorScheme, isDark, isSmallScreen, isCompact, isTablet),
+              if (_selectedCourseSchedule != null) ...[
+                SizedBox(height: isTablet ? 20 : 16),
+                _buildScheduleInfo(colorScheme, isDark, isSmallScreen, isCompact),
+              ],
               SizedBox(height: isTablet ? 28 : 24),
 
               if (_allStudents.isNotEmpty) ...[
@@ -569,9 +592,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
                 _buildSubmitButton(isSmallScreen, isCompact),
               ],
 
-              if (_selectedCourse != null &&
-                  _allStudents.isEmpty &&
-                  !_isLoading)
+              if (_selectedCourse != null && _allStudents.isEmpty && !_isLoading)
                 _buildEmptyStudentsState(colorScheme, isDark, isSmallScreen, isCompact),
             ],
           ),
@@ -666,11 +687,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
               color: colorScheme.onSurface.withOpacity(0.4),
               fontSize: isSmallScreen ? 13 : 14,
             ),
-            // prefixIcon: Icon(
-            //   Icons.book_rounded,
-            //   color: AppColors.primaryBlue,
-            //   size: isSmallScreen ? 20 : 24,
-            // ),
             filled: true,
             fillColor: isDark ? colorScheme.surface : Colors.white,
             contentPadding: EdgeInsets.symmetric(
@@ -684,16 +700,33 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
             color: colorScheme.onSurface,
           ),
           items: _courses.map((course) {
-            final courseData = course['Course'] as Map<String, dynamic>?;
-            final id = widget.role == 'faculty'
-                ? course['LectureOfferingId']?.toString()
-                : course['SectionOfferingId']?.toString();
+            Map<String, dynamic>? courseData;
+            String? id;
+            String? academicYear;
+            String? semester;
+            Map<String, dynamic>? schedule;
+
+            if (widget.role == 'faculty') {
+              courseData = course['course'] as Map<String, dynamic>?;
+              id = course['lectureofferingid']?.toString();
+              academicYear = course['academicyear']?.toString();
+              semester = course['semester']?.toString();
+              schedule = course;
+            } else {
+              final sectionOffering = course['sectioncourseoffering'] as Map<String, dynamic>?;
+              courseData = sectionOffering?['course'] as Map<String, dynamic>?;
+              id = sectionOffering?['sectionofferingid']?.toString();
+              schedule = sectionOffering;
+            }
+
+            final displayText = courseData != null
+                ? '${courseData['coursecode']} - ${courseData['coursename']}${academicYear != null ? ' ($academicYear ${semester ?? ''})' : ''}'
+                : 'Unknown Course';
+
             return DropdownMenuItem<String>(
               value: id,
               child: Text(
-                courseData != null
-                    ? '${courseData['Code']} - ${courseData['Title']}'
-                    : 'Unknown Course',
+                displayText,
                 overflow: TextOverflow.ellipsis,
               ),
             );
@@ -706,6 +739,27 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
               _selectedStudents.clear();
               _searchController.clear();
               _searchQuery = '';
+
+              // Store academic year, semester, and schedule info
+              if (widget.role == 'faculty') {
+                final selectedCourseData = _courses.firstWhere(
+                      (c) => c['lectureofferingid'] == value,
+                  orElse: () => {},
+                );
+                _selectedAcademicYear = selectedCourseData['academicyear']?.toString();
+                _selectedSemester = selectedCourseData['semester']?.toString();
+                _selectedCourseSchedule = selectedCourseData;
+              } else {
+                final selectedCourseData = _courses.firstWhere(
+                      (c) => (c['sectioncourseoffering'] as Map<String, dynamic>?)?['sectionofferingid'] == value,
+                  orElse: () => {},
+                );
+                final sectionOffering = selectedCourseData['sectioncourseoffering'] as Map<String, dynamic>?;
+                _selectedCourseSchedule = sectionOffering;
+              }
+
+              // Set initial date to the most recent matching scheduled day
+              _selectedDate = _findMostRecentScheduledDate();
             });
             _loadStudents();
           },
@@ -714,8 +768,43 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
     );
   }
 
+  Widget _buildScheduleInfo(ColorScheme colorScheme, bool isDark, bool isSmallScreen, bool isCompact) {
+    if (_selectedCourseSchedule == null) return const SizedBox.shrink();
+
+    final timeslot = _selectedCourseSchedule!['timeslot'] as Map<String, dynamic>?;
+    if (timeslot == null) return const SizedBox.shrink();
+
+    final dayOfWeek = timeslot['dayofweek']?.toString() ?? 'N/A';
+    final startTime = timeslot['starttime']?.toString() ?? 'N/A';
+    final endTime = timeslot['endtime']?.toString() ?? 'N/A';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withOpacity(isDark ? 0.15 : 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.schedule_rounded, size: 18, color: AppColors.primaryBlue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Scheduled: $dayOfWeek, $startTime - $endTime',
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 13,
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDateStatusRow(ColorScheme colorScheme, bool isDark, bool isSmallScreen, bool isCompact, bool isTablet) {
-    // Stack vertically on very small screens
     if (isSmallScreen) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -754,12 +843,18 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         ),
         const SizedBox(height: 8),
         InkWell(
-          onTap: () async {
+          onTap: _selectedCourseSchedule == null
+              ? null
+              : () async {
             final date = await showDatePicker(
               context: context,
               initialDate: _selectedDate,
               firstDate: DateTime.now().subtract(const Duration(days: 365)),
               lastDate: DateTime.now(),
+              selectableDayPredicate: (DateTime date) {
+                // Only allow dates that match the course schedule
+                return _isDateMatchingSchedule(date);
+              },
               builder: (context, child) {
                 return Theme(
                   data: Theme.of(context).copyWith(
@@ -780,31 +875,67 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
             padding: EdgeInsets.all(isCompact ? 12 : 14),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: AppColors.primaryBlue.withOpacity(0.3)),
+                color: _selectedCourseSchedule == null
+                    ? colorScheme.outline.withOpacity(0.3)
+                    : AppColors.primaryBlue.withOpacity(0.3),
+              ),
               borderRadius: BorderRadius.circular(14),
-              color: isDark ? colorScheme.surface : Colors.white,
+              color: _selectedCourseSchedule == null
+                  ? (isDark ? colorScheme.surface.withOpacity(0.5) : Colors.grey.shade100)
+                  : (isDark ? colorScheme.surface : Colors.white),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
-                    DateFormat('MMM dd, yyyy').format(_selectedDate),
+                    _selectedCourseSchedule == null
+                        ? 'Select a course first'
+                        : DateFormat('MMM dd, yyyy').format(_selectedDate),
                     style: TextStyle(
                       fontSize: isSmallScreen ? 13 : 14,
-                      color: colorScheme.onSurface,
+                      color: _selectedCourseSchedule == null
+                          ? colorScheme.onSurface.withOpacity(0.4)
+                          : colorScheme.onSurface,
                     ),
                   ),
                 ),
                 Icon(
                   Icons.calendar_today_rounded,
                   size: isSmallScreen ? 18 : 20,
-                  color: AppColors.primaryBlue,
+                  color: _selectedCourseSchedule == null
+                      ? colorScheme.onSurface.withOpacity(0.3)
+                      : AppColors.primaryBlue,
                 ),
               ],
             ),
           ),
         ),
+        if (_selectedCourseSchedule != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withOpacity(isDark ? 0.15 : 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: AppColors.primaryBlue),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Only ${_getScheduledDayName()} dates are selectable',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 10 : 11,
+                      color: colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -831,8 +962,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide:
-              BorderSide(color: AppColors.primaryBlue, width: 2),
+              borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
             ),
             filled: true,
             fillColor: isDark ? colorScheme.surface : Colors.white,
@@ -846,7 +976,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
             fontSize: isSmallScreen ? 13 : 14,
             color: colorScheme.onSurface,
           ),
-          items: ['Present', 'Absent', 'Late', 'Excused'].map((status) {
+          items: ['Present', 'Absent'].map((status) {
             return DropdownMenuItem(
               value: status,
               child: Row(
@@ -866,6 +996,29 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
           onChanged: (value) {
             setState(() => _selectedStatus = value!);
           },
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.secondaryOrange.withOpacity(isDark ? 0.15 : 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: AppColors.secondaryOrange),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Note: Database only supports Present/Absent',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 10 : 11,
+                    color: colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -897,20 +1050,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              prefixIcon: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.8, end: 1.0),
-                duration: const Duration(milliseconds: 300),
-                builder: (context, value, child) {
-                  return Transform.scale(
-                    scale: value,
-                    child: Icon(
-                      Icons.search_rounded,
-                      color: AppColors.primaryBlue,
-                      size: isSmallScreen ? 20 : 24,
-                    ),
-                  );
-                },
-              ),
+              prefixIcon: Icon(Icons.search_rounded, color: AppColors.primaryBlue, size: isSmallScreen ? 20 : 24),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
                 icon: Icon(
@@ -924,7 +1064,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
                 },
               )
                   : null,
-              hintText: 'Search by name or code...',
+              hintText: 'Search by name or email...',
               hintStyle: TextStyle(
                 color: colorScheme.onSurface.withOpacity(0.4),
                 fontSize: isSmallScreen ? 13 : 14,
@@ -966,7 +1106,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
   }
 
   Widget _buildStudentListHeader(ColorScheme colorScheme, bool isSmallScreen, bool isCompact) {
-    // Stack vertically on very small screens
     if (isSmallScreen) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1026,10 +1165,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
                 _selectedStudents.length == _filteredStudents.length
                     ? 'Deselect All'
                     : 'Select All',
-                style: TextStyle(
-                  color: AppColors.primaryBlue,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: AppColors.primaryBlue, fontSize: 13),
               ),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: AppColors.primaryBlue),
@@ -1166,7 +1302,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
               ),
             ),
             subtitle: Text(
-              'Code: $code',
+              'ID: $code',
               style: TextStyle(
                 color: colorScheme.onSurface.withOpacity(0.6),
                 fontSize: isSmallScreen ? 11 : 12,
@@ -1280,7 +1416,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
             ),
             SizedBox(height: isCompact ? 6 : 8),
             Text(
-              'No students are enrolled in this course yet',
+              'No students are enrolled in this ${widget.role == 'faculty' ? 'course' : 'section'} yet',
               style: TextStyle(
                 color: colorScheme.onSurface.withOpacity(0.6),
                 fontSize: isSmallScreen ? 13 : 14,
@@ -1299,10 +1435,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         return Icons.check_circle_rounded;
       case 'Absent':
         return Icons.cancel_rounded;
-      case 'Late':
-        return Icons.schedule_rounded;
-      case 'Excused':
-        return Icons.info_rounded;
       default:
         return Icons.circle;
     }
@@ -1314,10 +1446,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen> {
         return AppColors.accentGreen;
       case 'Absent':
         return AppColors.accentRed;
-      case 'Late':
-        return AppColors.secondaryOrange;
-      case 'Excused':
-        return AppColors.primaryBlue;
       default:
         return AppColors.tertiaryLightGray;
     }

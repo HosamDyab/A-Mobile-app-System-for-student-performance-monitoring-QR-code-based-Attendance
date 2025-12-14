@@ -105,7 +105,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final loginData = await AuthService.getLoginData();
       final email = loginData['email'] ?? '';
-      final savedStudentId = loginData['studentId'];
+      final savedStudentId =   loginData['studentId'];
 
       if (savedStudentId != null && savedStudentId.isNotEmpty) {
         studentId = savedStudentId;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'dart:convert'; // Add this for JSON formatting
 
 import '../blocs/DashboardCubit/DashboardCubit.dart';
 import '../blocs/DashboardCubit/DashboardState.dart';
@@ -153,22 +154,66 @@ class _DashboardPageState extends State<DashboardPage> {
           );
         }
 
+        // Update the DashboardLoaded section in your DashboardPage
+
         if (state is DashboardLoaded) {
           final profile = state.profile;
-          final courses = state.courses;
+          // ✅ FIX: Cast to proper type
+          final courses = List<Map<String, dynamic>>.from(state.courses);
 
-          // Filter courses based on search query
-          final filteredCourses =
-              _searchQuery != null && _searchQuery!.isNotEmpty
-                  ? courses.where((course) {
-                      final courseTitle = course['SectionCourseOffering']
-                                  ?['Course']?['Title']
-                              ?.toString()
-                              .toLowerCase() ??
-                          '';
-                      return courseTitle.contains(_searchQuery!.toLowerCase());
-                    }).toList()
-                  : courses;
+          // ============= DEBUG PRINTS START =============
+          print('\n=== DASHBOARD DEBUG INFO ===');
+          print('Total courses returned: ${courses.length}');
+          print('\n--- Raw Courses Data ---');
+
+          // Print formatted JSON for each course
+          for (int i = 0; i < courses.length; i++) {
+            print('\n--- Course $i ---');
+            try {
+              // Pretty print the JSON
+              final prettyJson = JsonEncoder.withIndent('  ').convert(courses[i]);
+              print(prettyJson);
+            } catch (e) {
+              // Fallback to regular print if JSON encoding fails
+              print(courses[i]);
+            }
+          }
+
+          // Print the structure/keys of first course (if exists)
+          if (courses.isNotEmpty) {
+            print('\n--- First Course Structure ---');
+            print('Top-level keys: ${courses[0].keys.toList()}');
+
+            if (courses[0].containsKey('lecturecourseoffering')) {
+              print('lecturecourseoffering keys: ${courses[0]['lecturecourseoffering']?.keys.toList()}');
+
+              if (courses[0]['lecturecourseoffering']?['course'] != null) {
+                print('course keys: ${courses[0]['lecturecourseoffering']['course']?.keys.toList()}');
+              }
+            }
+          }
+
+          print('\n=== END DEBUG INFO ===\n');
+          // ============= DEBUG PRINTS END =============
+
+          // ✅ FIX: Explicitly type the filtered courses
+          final List<Map<String, dynamic>> filteredCourses =
+          _searchQuery != null && _searchQuery!.isNotEmpty
+              ? courses.where((course) {
+            print('Filtering course: ${course}');
+
+            final courseTitle = course['lecturecourseoffering']
+            ?['course']?['coursename']
+                ?.toString()
+                .toLowerCase() ?? '';
+
+            print('Course title extracted: "$courseTitle"');
+
+            return courseTitle.contains(_searchQuery!.toLowerCase());
+          }).toList()
+              : courses;
+
+          print('\nFiltered courses count: ${filteredCourses.length}');
 
           return PopScope(
             canPop: false,
@@ -179,7 +224,7 @@ class _DashboardPageState extends State<DashboardPage> {
               appBar: AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                automaticallyImplyLeading: false, // Remove back button
+                automaticallyImplyLeading: false,
                 title: Row(
                   children: [
                     Container(
@@ -339,101 +384,6 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           const SizedBox(height: 20),
-          // TweenAnimationBuilder<double>(
-          //   tween: Tween(begin: 0.0, end: 1.0),
-          //   duration: const Duration(milliseconds: 500),
-          //   curve: Curves.easeOutCubic,
-          //   builder: (context, value, child) {
-          //     return Transform.scale(
-          //       scale: 0.9 + (0.1 * value),
-          //       child: Opacity(
-          //         opacity: value,
-          //         child: Container(
-          //           decoration: BoxDecoration(
-          //             borderRadius: BorderRadius.circular(20),
-          //             boxShadow: [
-          //               BoxShadow(
-          //                 color: AppColors.primaryBlue.withOpacity(0.2),
-          //                 blurRadius: 15,
-          //                 offset: const Offset(0, 5),
-          //               ),
-          //             ],
-          //           ),
-          //           child: TextField(
-          //             controller: _searchController,
-          //             autofocus: true,
-          //             style: theme.textTheme.bodyLarge,
-          //             decoration: InputDecoration(
-          //               hintText: "Search courses, faculty, or anything...",
-          //               hintStyle: TextStyle(
-          //                 color: AppColors.tertiaryLightGray.withOpacity(0.7),
-          //               ),
-          //               prefixIcon: Container(
-          //                 padding: const EdgeInsets.all(14),
-          //                 decoration: BoxDecoration(
-          //                   gradient: AppColors.primaryGradient,
-          //                   borderRadius: const BorderRadius.only(
-          //                     topLeft: Radius.circular(20),
-          //                     bottomLeft: Radius.circular(20),
-          //                   ),
-          //                 ),
-          //                 child: const Icon(Icons.search_rounded,
-          //                     color: Colors.white, size: 24),
-          //               ),
-          //               suffixIcon: _searchController.text.isNotEmpty
-          //                   ? IconButton(
-          //                       icon: Container(
-          //                         padding: const EdgeInsets.all(8),
-          //                         decoration: BoxDecoration(
-          //                           color: AppColors.accentRed.withOpacity(0.1),
-          //                           shape: BoxShape.circle,
-          //                         ),
-          //                         child: Icon(Icons.clear_rounded,
-          //                             color: AppColors.accentRed, size: 18),
-          //                       ),
-          //                       onPressed: () {
-          //                         _searchController.clear();
-          //                         setState(() {});
-          //                       },
-          //                     )
-          //                   : null,
-          //               border: OutlineInputBorder(
-          //                 borderRadius: BorderRadius.circular(20),
-          //                 borderSide: BorderSide(
-          //                   color: AppColors.primaryBlue.withOpacity(0.3),
-          //                   width: 2,
-          //                 ),
-          //               ),
-          //               enabledBorder: OutlineInputBorder(
-          //                 borderRadius: BorderRadius.circular(20),
-          //                 borderSide: BorderSide(
-          //                   color: AppColors.primaryBlue.withOpacity(0.3),
-          //                   width: 2,
-          //                 ),
-          //               ),
-          //               focusedBorder: OutlineInputBorder(
-          //                 borderRadius: BorderRadius.circular(20),
-          //                 borderSide: BorderSide(
-          //                   color: AppColors.primaryBlue,
-          //                   width: 3,
-          //                 ),
-          //               ),
-          //               filled: true,
-          //               fillColor: Colors.white,
-          //               contentPadding: const EdgeInsets.symmetric(
-          //                 horizontal: 20,
-          //                 vertical: 18,
-          //               ),
-          //             ),
-          //             onChanged: (value) {
-          //               setState(() {});
-          //             },
-          //           ),
-          //         ),
-          //       ),
-          //     );
-          //   },
-          // ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -482,11 +432,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildQuickAction(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
+      BuildContext context, {
+        required IconData icon,
+        required String label,
+        required VoidCallback onTap,
+      }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -511,9 +461,9 @@ class _DashboardPageState extends State<DashboardPage> {
             Text(
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

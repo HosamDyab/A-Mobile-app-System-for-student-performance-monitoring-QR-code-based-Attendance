@@ -5,13 +5,13 @@ import '../../../models/teacher_assistant.dart';
 class TeacherAssistantDataSource {
   final supabase = Supabase.instance.client;
 
-  /// Get all teacher assistants with their user details
+  /// Get all teacher assistants
   Future<List<TeacherAssistant>> getAllTeacherAssistants() async {
     try {
       final response = await supabase
-          .from('TeacherAssistant')
-          .select('*, User(FullName, Email)')
-          .order('TAId');
+          .from('ta')
+          .select('*')
+          .order('tasnn');
 
       return (response as List<dynamic>)
           .map((e) => TeacherAssistant.fromJson(e as Map<String, dynamic>))
@@ -25,45 +25,56 @@ class TeacherAssistantDataSource {
   /// Search teacher assistants by name or email
   Future<List<TeacherAssistant>> searchTeacherAssistants(String query) async {
     try {
-      // First get all TAs with user info
-      final response = await supabase
-          .from('TeacherAssistant')
-          .select('*, User(FullName, Email)')
-          .order('TAId');
+      final searchQuery = query.toLowerCase();
 
-      final allTAs = (response as List<dynamic>)
+      // Search using ilike for case-insensitive pattern matching
+      final response = await supabase
+          .from('ta')
+          .select('*')
+          .or('fullname.ilike.%$searchQuery%,email.ilike.%$searchQuery%')
+          .order('tasnn');
+
+      return (response as List<dynamic>)
           .map((e) => TeacherAssistant.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      // Filter by name or email
-      return allTAs.where((ta) {
-        final name = ta.fullName?.toLowerCase() ?? '';
-        final email = ta.email?.toLowerCase() ?? '';
-        final searchQuery = query.toLowerCase();
-        return name.contains(searchQuery) || email.contains(searchQuery);
-      }).toList();
     } catch (e) {
       print('Error searching teacher assistants: $e');
       return [];
     }
   }
 
-  /// Get teacher assistants assigned to a specific faculty
-  Future<List<TeacherAssistant>> getTeacherAssistantsByFaculty(String facultyId) async {
+  /// Get teacher assistants by department code
+  Future<List<TeacherAssistant>> getTeacherAssistantsByDepartment(String depCode) async {
     try {
       final response = await supabase
-          .from('TeacherAssistant')
-          .select('*, User(FullName, Email)')
-          .eq('FacultyId', facultyId)
-          .order('TAId');
+          .from('ta')
+          .select('*')
+          .eq('depcode', depCode)
+          .order('tasnn');
 
       return (response as List<dynamic>)
           .map((e) => TeacherAssistant.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error fetching TAs for faculty: $e');
+      print('Error fetching TAs for department: $e');
+      return [];
+    }
+  }
+
+  /// Get teacher assistants assigned to a specific course
+  Future<List<TeacherAssistant>> getTeacherAssistantsByCourse(String courseCode) async {
+    try {
+      final response = await supabase
+          .from('courseta')
+          .select('ta(*)')
+          .eq('coursecode', courseCode);
+
+      return (response as List<dynamic>)
+          .map((e) => TeacherAssistant.fromJson(e['ta'] as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('Error fetching TAs for course: $e');
       return [];
     }
   }
 }
-

@@ -1,7 +1,6 @@
-
-import 'package:qra/Teacher/models/lecture_attendance.dart';
-import 'package:qra/Teacher/services/repositories/live_attendance_repository.dart';
-import 'package:qra/Teacher/services/datasources/live_attendance_remote_source.dart';
+import '../../models/lecture_attendance.dart';
+import '../datasources/live_attendance_remote_source.dart';
+import 'live_attendance_repository.dart';
 
 class LiveAttendanceRepositoryImpl implements LiveAttendanceRepository {
   final LiveAttendanceRemoteDataSource remoteDataSource;
@@ -9,8 +8,9 @@ class LiveAttendanceRepositoryImpl implements LiveAttendanceRepository {
   LiveAttendanceRepositoryImpl(this.remoteDataSource);
 
   @override
-  Future<List<LectureAttendance>> getAttendanceForLecture(String instanceId) async {
+  Future<List<LectureAttendance>> getAttendanceForLecture(
+      String instanceId) async {
     final models = await remoteDataSource.getAttendanceForLecture(instanceId);
-    return models; 
+    return models;
   }
 }

@@ -1,54 +1,106 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../services/email_service.dart';
-import '../../shared/utils/app_colors.dart';
+import '../../Teacher/shared/constants/app_color.dart';
+import '../../services/email/email_service.dart';
 import '../../shared/widgets/hover_scale_widget.dart';
 import '../../ustils/supabase_manager.dart';
 import '../utils/otp_generator.dart';
 
-/// Handles the complete password reset flow.
-///
-/// Coordinates OTP generation, email sending, verification, and password updates.
 class PasswordResetHandler {
   final EmailService _emailService = EmailService();
   String _generatedOTP = '';
   String _userEmail = '';
+  String _userId = '';
+  String _userType = '';
 
   /// Sends OTP to the user's email address.
-  ///
-  /// Returns `true` if email was sent successfully, `false` otherwise.
-  Future<bool> sendOTP(String email) async {
-    _userEmail = email;
-    _generatedOTP = OTPGenerator.generate();
+  /// [emailOrId] can be either email or user ID
+  /// [userType] should be 'student', 'faculty', or 'ta'
+  Future<bool> sendOTP(String emailOrId, String userType) async {
+    final supabase = SupabaseManager.client;
 
-    final userName = email.split('@')[0].split('.')[0];
-    final capitalizedName = userName[0].toUpperCase() + userName.substring(1);
+    // Determine if input is email or ID
+    final bool isEmail = emailOrId.contains('@');
 
-    return await _emailService.sendOTPEmail(
-      email: email,
-      otp: _generatedOTP,
-      userName: capitalizedName,
-    );
+    String userId = '';
+    String userEmail = '';
+    String userName = '';
+
+    try {
+      if (userType == 'student') {
+        final query = isEmail
+            ? supabase.from('student').select('studentid, email, fullname').eq('email', emailOrId)
+            : supabase.from('student').select('studentid, email, fullname').eq('studentid', emailOrId);
+
+        final student = await query.maybeSingle();
+        if (student == null) throw Exception('Student not found');
+
+        userId = student['studentid'];
+        userEmail = student['email'];
+        userName = student['fullname'];
+
+      } else if (userType == 'faculty') {
+        final query = isEmail
+            ? supabase.from('faculty').select('facultysnn, email, fullname').eq('email', emailOrId)
+            : supabase.from('faculty').select('facultysnn, email, fullname').eq('facultysnn', emailOrId);
+
+        final faculty = await query.maybeSingle();
+        if (faculty == null) throw Exception('Faculty not found');
+
+        userId = faculty['facultysnn'];
+        userEmail = faculty['email'];
+        userName = faculty['fullname'];
+
+      } else if (userType == 'ta') {
+        final query = isEmail
+            ? supabase.from('ta').select('tasnn, email, fullname').eq('email', emailOrId)
+            : supabase.from('ta').select('tasnn, email, fullname').eq('tasnn', emailOrId);
+
+        final ta = await query.maybeSingle();
+        if (ta == null) throw Exception('TA not found');
+
+        userId = ta['tasnn'];
+        userEmail = ta['email'];
+        userName = ta['fullname'];
+      }
+
+      _userId = userId;
+      _userEmail = userEmail;
+      _userType = userType;
+      _generatedOTP = OTPGenerator.generate();
+
+      // Extract first name for personalization
+      final firstName = userName.split(' ')[0];
+      final capitalizedName = firstName[0].toUpperCase() + firstName.substring(1);
+
+      return await _emailService.sendOTPEmail(
+        email: userEmail,
+        otp: _generatedOTP,
+        userName: capitalizedName,
+      );
+    } catch (e) {
+      print('❌ Error sending OTP: $e');
+      return false;
+    }
   }
 
   /// Verifies the OTP entered by the user.
-  ///
-  /// Returns `true` if the OTP matches the generated one.
   bool verifyOTP(String enteredOTP) {
     return enteredOTP.trim() == _generatedOTP;
   }
 
   /// Resets the user's password in the database.
-  ///
-  /// Throws an exception if the update fails.
   Future<void> resetPassword(String newPassword) async {
     final supabase = SupabaseManager.client;
 
     await supabase
-        .from('User')
-        .update({'PasswordHash': newPassword}).eq('Email', _userEmail);
+        .from('user_credentials')
+        .update({'hashed_password': newPassword})
+        .eq('user_id', _userId)
+        .eq('user_type', _userType);
 
-    print('✅ Password updated successfully for: $_userEmail');
+    print('✅ Password updated successfully for: $_userEmail (ID: $_userId)');
   }
 
   /// Shows a success dialog after password reset.
@@ -74,7 +126,7 @@ class PasswordResetHandler {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.accentGreen, const Color(0xFF059669)],
+                    colors: [Colors.green, const Color(0xFF059669)],
                   ),
                   shape: BoxShape.circle,
                 ),
@@ -88,8 +140,8 @@ class PasswordResetHandler {
               Text(
                 'Success!',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -102,11 +154,10 @@ class PasswordResetHandler {
               onTap: onDismiss,
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(16),
+                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primaryBlue.withOpacity(0.3),
+                      color: Colors.blue.withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -138,11 +189,11 @@ class PasswordResetHandler {
 
   /// Shows a snackbar with the given message and color.
   static void showSnackBar(
-    BuildContext context, {
-    required String message,
-    required Color backgroundColor,
-    required IconData icon,
-  }) {
+      BuildContext context, {
+        required String message,
+        required Color backgroundColor,
+        required IconData icon,
+      }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(

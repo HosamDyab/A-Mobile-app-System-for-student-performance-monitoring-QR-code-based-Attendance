@@ -12,7 +12,7 @@ class StudentSearchState {
   final bool isLoadingFaculty;
   final List<CourseEntitySearch> courses;
   final List<FacultyEntitySearch> faculty;
-  final String? error; // null => no error
+  final String? error;
 
   const StudentSearchState({
     this.isLoadingCourses = false,
@@ -27,8 +27,6 @@ class StudentSearchState {
     bool? isLoadingFaculty,
     List<CourseEntitySearch>? courses,
     List<FacultyEntitySearch>? faculty,
-    // NOTE: `error == null` means "preserve existing error".
-    // To clear error explicitly call clearError() on the cubit.
     String? error,
     bool setErrorToNull = false,
   }) {
@@ -46,7 +44,7 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
   final StudentRepositorySearch repository;
   String? _studentId;
 
-  // caches for filtering
+  // Caches for filtering
   List<CourseEntitySearch> _allCourses = [];
   List<FacultyEntitySearch> _allFaculty = [];
 
@@ -56,43 +54,45 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
   })  : _studentId = initialStudentId,
         super(const StudentSearchState());
 
-  /// Allows setting the studentId after construction.
-  /// If [loadInitialData] is true, it will call loadAllCourses() and loadAllFaculty().
+  /// Set student ID and optionally load initial data
   void setStudentId(String studentId, {bool loadInitialData = true}) {
     _studentId = studentId;
     if (loadInitialData) {
-      // fire-and-forget — callers can await if they need to by calling the methods directly.
       loadAllCourses();
       loadAllFaculty();
     }
   }
 
-  /// Explicitly clear error in state.
+  /// Clear error in state
   void clearError() {
     emit(state.copyWith(setErrorToNull: true));
   }
 
   bool get hasStudentId => _studentId != null && _studentId!.isNotEmpty;
 
+  // ==================== COURSES ====================
+
   Future<void> loadAllCourses() async {
     if (!hasStudentId) {
       emit(state.copyWith(
         isLoadingCourses: false,
-        // preserve error (or set a meaningful one)
         error: 'Student ID not set',
       ));
       return;
     }
 
-    emit(state.copyWith(isLoadingCourses: true, error: null));
+    emit(state.copyWith(isLoadingCourses: true, setErrorToNull: true));
 
     try {
       final courses = await repository.searchStudentCourses(_studentId!, '');
 
-      final safeCourses = courses
-          .where(
-              (c) => c.title.trim().isNotEmpty && c.title != 'Unknown Course')
-          .toList();
+      // ✅ FIXED: Filter by courseName instead of title
+      final safeCourses = courses.where((c) {
+        return c.courseName.trim().isNotEmpty &&
+            c.courseName != 'Unknown Course' &&
+            c.courseCode.trim().isNotEmpty &&
+            c.courseCode != 'N/A';
+      }).toList();
 
       _allCourses = safeCourses;
 
@@ -101,9 +101,11 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
         courses: safeCourses,
       ));
     } catch (e) {
-      emit(state.copyWith(isLoadingCourses: false, error: e.toString()));
-      // optional: debug print
-      // debugPrint('loadAllCourses error: $e\n$st');
+      print('❌ loadAllCourses error: $e');
+      emit(state.copyWith(
+        isLoadingCourses: false,
+        error: e.toString(),
+      ));
     }
   }
 
@@ -113,10 +115,14 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
       return;
     }
 
-    final filtered = _allCourses
-        .where((course) =>
-            course.title.toLowerCase().contains(query.toLowerCase()))
-        .toList();
+    final lowerQuery = query.toLowerCase();
+
+    // ✅ FIXED: Filter by both courseName and courseCode
+    final filtered = _allCourses.where((course) {
+      final nameMatch = course.courseName.toLowerCase().contains(lowerQuery);
+      final codeMatch = course.courseCode.toLowerCase().contains(lowerQuery);
+      return nameMatch || codeMatch;
+    }).toList();
 
     emit(state.copyWith(courses: filtered));
   }
@@ -128,20 +134,25 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
 
   Future<void> searchCourses(String query) async {
     if (!hasStudentId) {
-      emit(
-          state.copyWith(isLoadingCourses: false, error: 'Student ID not set'));
+      emit(state.copyWith(
+        isLoadingCourses: false,
+        error: 'Student ID not set',
+      ));
       return;
     }
 
-    emit(state.copyWith(isLoadingCourses: true, error: null));
+    emit(state.copyWith(isLoadingCourses: true, setErrorToNull: true));
 
     try {
       final courses = await repository.searchStudentCourses(_studentId!, query);
 
-      final safeCourses = courses
-          .where(
-              (c) => c.title.trim().isNotEmpty && c.title != 'Unknown Course')
-          .toList();
+      // ✅ FIXED: Filter by courseName and courseCode
+      final safeCourses = courses.where((c) {
+        return c.courseName.trim().isNotEmpty &&
+            c.courseName != 'Unknown Course' &&
+            c.courseCode.trim().isNotEmpty &&
+            c.courseCode != 'N/A';
+      }).toList();
 
       _allCourses = safeCourses;
 
@@ -150,56 +161,79 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
         courses: safeCourses,
       ));
     } catch (e) {
-      emit(state.copyWith(isLoadingCourses: false, error: e.toString()));
-      // debugPrint('searchCourses error: $e\n$st');
+      print('❌ searchCourses error: $e');
+      emit(state.copyWith(
+        isLoadingCourses: false,
+        error: e.toString(),
+      ));
     }
   }
 
+  // ==================== FACULTY ====================
+
   Future<void> loadAllFaculty() async {
     if (!hasStudentId) {
-      emit(
-          state.copyWith(isLoadingFaculty: false, error: 'Student ID not set'));
+      emit(state.copyWith(
+        isLoadingFaculty: false,
+        error: 'Student ID not set',
+      ));
       return;
     }
 
-    emit(state.copyWith(isLoadingFaculty: true, error: null));
+    emit(state.copyWith(isLoadingFaculty: true, setErrorToNull: true));
 
     try {
       final faculty = await repository.searchStudentFaculty(_studentId!, '');
 
-      final safeFaculty = faculty
-          .where((f) =>
-              f.fullName.trim().isNotEmpty && f.fullName != 'Unknown Faculty')
-          .toList();
+      // ✅ Filter valid faculty and remove duplicates
+      final Map<String, FacultyEntitySearch> uniqueFaculty = {};
 
-      _allFaculty = safeFaculty;
+      for (var f in faculty) {
+        if (f.fullName.trim().isNotEmpty &&
+            f.fullName != 'Unknown Faculty' &&
+            f.facultySnn.trim().isNotEmpty &&
+            f.facultySnn != 'N/A') {
+          // Use facultySnn as key to deduplicate
+          uniqueFaculty[f.facultySnn] = f;
+        }
+      }
+
+      _allFaculty = uniqueFaculty.values.toList();
 
       emit(state.copyWith(
         isLoadingFaculty: false,
-        faculty: safeFaculty,
+        faculty: _allFaculty,
       ));
     } catch (e) {
-      emit(state.copyWith(isLoadingFaculty: false, error: e.toString()));
-      // debugPrint('loadAllFaculty error: $e\n$st');
+      print('❌ loadAllFaculty error: $e');
+      emit(state.copyWith(
+        isLoadingFaculty: false,
+        error: e.toString(),
+      ));
     }
   }
 
   Future<void> searchFaculty(String query) async {
     if (!hasStudentId) {
-      emit(
-          state.copyWith(isLoadingFaculty: false, error: 'Student ID not set'));
+      emit(state.copyWith(
+        isLoadingFaculty: false,
+        error: 'Student ID not set',
+      ));
       return;
     }
 
-    emit(state.copyWith(isLoadingFaculty: true, error: null));
+    emit(state.copyWith(isLoadingFaculty: true, setErrorToNull: true));
 
     try {
       final faculty = await repository.searchStudentFaculty(_studentId!, query);
 
-      final validFaculty = faculty
-          .where((f) =>
-              f.fullName.trim().isNotEmpty && f.fullName != 'Unknown Faculty')
-          .toList();
+      // ✅ Filter valid faculty
+      final validFaculty = faculty.where((f) {
+        return f.fullName.trim().isNotEmpty &&
+            f.fullName != 'Unknown Faculty' &&
+            f.facultySnn.trim().isNotEmpty &&
+            f.facultySnn != 'N/A';
+      }).toList();
 
       _allFaculty = validFaculty;
 
@@ -208,8 +242,11 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
         faculty: validFaculty,
       ));
     } catch (e) {
-      emit(state.copyWith(isLoadingFaculty: false, error: e.toString()));
-      // debugPrint('searchFaculty error: $e\n$st');
+      print('❌ searchFaculty error: $e');
+      emit(state.copyWith(
+        isLoadingFaculty: false,
+        error: e.toString(),
+      ));
     }
   }
 
@@ -219,9 +256,14 @@ class StudentSearchCubit extends Cubit<StudentSearchState> {
       return;
     }
 
-    final filtered = _allFaculty
-        .where((f) => f.fullName.toLowerCase().contains(query.toLowerCase()))
-        .toList();
+    final lowerQuery = query.toLowerCase();
+
+    // ✅ Filter by fullName or email
+    final filtered = _allFaculty.where((f) {
+      final nameMatch = f.fullName.toLowerCase().contains(lowerQuery);
+      final emailMatch = f.email.toLowerCase().contains(lowerQuery);
+      return nameMatch || emailMatch;
+    }).toList();
 
     emit(state.copyWith(faculty: filtered));
   }

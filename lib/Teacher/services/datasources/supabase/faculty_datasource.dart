@@ -6,58 +6,137 @@ class FacultyDataSource {
 
   Future<List<CourseOffering>> getFacultyCourses(String facultyId, String role) async {
     try {
-      // For Faculty: Query LectureCourseOffering with FacultyId
+      // Get today's date
+      final now = DateTime.now().toUtc();
+      final today = DateTime(now.year, now.month, now.day);
+      final todayStr = today.toIso8601String().split('T')[0];
+
       if (role == 'faculty') {
+        // Fetch today's lecture instances for this faculty
         final response = await supabase
-            .from('LectureCourseOffering')
-            .select('*, Course(*)')
-            .eq('FacultyId', facultyId);
+            .from('lectureinstance')
+            .select('''
+              linstanceid,
+              lectureofferingid,
+              meetingdate,
+              starttime,
+              endtime,
+              lecturecourseoffering!inner(
+                lectureofferingid,
+                coursecode,
+                facultysnn,
+                slotid,
+                roomid,
+                course:coursecode(coursename),
+                room:roomid(roomid),
+                timeslot:slotid(dayofweek, starttime, endtime)
+              )
+            ''')
+            .eq('lecturecourseoffering.facultysnn', facultyId)
+            .eq('meetingdate', todayStr)
+            .order('starttime', ascending: true);
 
-        final courses = (response as List<dynamic>)
-            .map((e) => CourseOffering.fromJson(e as Map<String, dynamic>))
-            .toList();
-        
-        print('📚 Fetched ${courses.length} courses for faculty $facultyId');
-        for (var course in courses) {
-          print('   - ${course.courseCode}: ${course.schedule}');
-        }
-        
-        return courses;
-      } 
-      // For Teacher Assistant: Query SectionCourseOffering with TAId
-      else if (role == 'teacher_assistant') {
-        final response = await supabase
-            .from('SectionCourseOffering')
-            .select('*, Course(*)')
-            .eq('TAId', facultyId);
+        print("\n=======================");
+        print("📥 RAW RESPONSE (Faculty Instances)");
+        print("=======================");
+        print(response);
+        print("=======================\n");
 
-        // Map section offerings to course offerings
-        final courses = (response as List<dynamic>)
-            .map((e) {
-              // Convert section data to match lecture offering format
-              return CourseOffering(
-                id: e['CourseId']?.toString() ?? '',
-                courseCode: e['Course'] != null ? e['Course']['Code'] : '',
-                courseTitle: e['Course'] != null ? e['Course']['Title'] : '',
-                schedule: e['Schedule'] ?? '',
-                lectureOfferingId: e['SectionOfferingId']?.toString() ?? '',
-              );
-            })
-            .toList();
-        
-        print('📚 Fetched ${courses.length} sections for TA $facultyId');
-        for (var course in courses) {
-          print('   - ${course.courseCode}: ${course.schedule}');
-        }
-        
+        final courses = (response as List<dynamic>).map((e) {
+          final offering = e['lecturecourseoffering'];
+          final timeslot = offering['timeslot'];
+
+          // Use instance times if available, otherwise fall back to slot times
+          final startTime = e['starttime'] ?? timeslot?['starttime'];
+          final endTime = e['endtime'] ?? timeslot?['endtime'];
+          final dayOfWeek = timeslot?['dayofweek'] ?? '';
+
+          final schedule = timeslot != null
+              ? "$dayOfWeek | $startTime - $endTime"
+              : "No Schedule";
+
+          return CourseOffering(
+            id: e['linstanceid'].toString(), // Use instance ID instead of offering ID
+            courseCode: offering['coursecode'] ?? '',
+            courseTitle: offering['course']?['coursename'] ?? '',
+            schedule: schedule,
+            offeringId: e['linstanceid'].toString(), // Instance ID for QR generation
+          );
+        }).toList();
+
+        print("📚 Faculty Lecture Instances Today = ${courses.length}");
         return courses;
       }
-      
+
+      if (role == 'teacher_assistant') {
+        // First get section offerings for this TA
+        final sectionTAs = await supabase
+            .from('sectionta')
+            .select('sectionofferingid')
+            .eq('tasnn', facultyId);
+
+        if ((sectionTAs as List).isEmpty) {
+          print("⚠️ No sections assigned to this TA");
+          return [];
+        }
+
+        final sectionIds = sectionTAs.map((e) => e['sectionofferingid']).toList();
+
+        // Fetch today's section instances for these sections
+        final response = await supabase
+            .from('sectioninstance')
+            .select('''
+              sinstanceid,
+              sectionofferingid,
+              meetingdate,
+              weeknumber,
+              sectioncourseoffering!inner(
+                sectionofferingid,
+                coursecode,
+                groupnumber,
+                slotid,
+                roomid,
+                course:coursecode(coursename),
+                room:roomid(roomid),
+                timeslot:slotid(dayofweek, starttime, endtime)
+              )
+            ''')
+            .inFilter('sectionofferingid', sectionIds)
+            .eq('meetingdate', todayStr)
+            .order('weeknumber', ascending: true);
+
+        print("\n=======================");
+        print("📥 RAW RESPONSE (TA Instances)");
+        print("=======================");
+        print(response);
+        print("=======================\n");
+
+        final courses = (response as List<dynamic>).map((e) {
+          final offering = e['sectioncourseoffering'];
+          final timeslot = offering['timeslot'];
+
+          final schedule = timeslot != null
+              ? "${timeslot['dayofweek']} | ${timeslot['starttime']} - ${timeslot['endtime']}"
+              : "No Schedule";
+
+          return CourseOffering(
+            id: e['sinstanceid'].toString(), // Use instance ID instead of offering ID
+            courseCode: offering['coursecode'] ?? '',
+            courseTitle: offering['course']?['coursename'] ?? 'Section ${offering['groupnumber']}',
+            schedule: schedule,
+            offeringId: e['sinstanceid'].toString(), // Instance ID for QR generation
+          );
+        }).toList();
+
+        print("📚 TA Section Instances Today = ${courses.length}");
+        return courses;
+      }
+
       return [];
-    } catch (e) {
-      print('❌ Error fetching courses for $role: $e');
+    } catch (e, stackTrace) {
+      print('❌ Error fetching courses: $e');
+      print('📍 Stack trace: $stackTrace');
       return [];
     }
   }
 }
-

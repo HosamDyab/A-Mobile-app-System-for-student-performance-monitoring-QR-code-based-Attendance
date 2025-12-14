@@ -18,6 +18,7 @@ class LectureAttendance {
   });
 }
 
+/// Data model for Supabase response
 class LectureAttendanceModel extends LectureAttendance {
   LectureAttendanceModel({
     required super.attendanceId,
@@ -31,13 +32,15 @@ class LectureAttendanceModel extends LectureAttendance {
 
   factory LectureAttendanceModel.fromJson(Map<String, dynamic> json) {
     return LectureAttendanceModel(
-      attendanceId: json['AttendanceId'],
-      studentId: json['StudentId'],
-      instanceId: json['InstanceId'],
-      scanTime: DateTime.parse(json['ScanTime']),
-      status: json['Status'],
-      studentName: json['Student']?['User']?['FullName'] as String?,
-      studentCode: json['Student']?['StudentCode'] as String?,
+      attendanceId: json['AttendanceId'] ?? '',
+      studentId: json['StudentId'] ?? '',
+      instanceId: json['InstanceId'] ?? '',
+      scanTime: json['ScanTime'] != null
+          ? DateTime.parse(json['ScanTime'])
+          : DateTime.now(),
+      status: json['Status'] ?? 'Present',
+      studentName: json['Student']?['FullName'],
+      studentCode: json['Student']?['StudentCode'],
     );
   }
 }

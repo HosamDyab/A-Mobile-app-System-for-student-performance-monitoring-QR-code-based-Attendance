@@ -12,29 +12,18 @@ import '../../viewmodels/live_attendance/live_attendance_cubit.dart';
 import '../live_attendance/live_attendance_screen.dart';
 import '../widgets/custom_app_bar.dart';
 
-/// Responsive breakpoints
+
 class ResponsiveBreakpoints {
   static const double mobile = 600;
   static const double tablet = 900;
   static const double desktop = 1200;
 }
 
-/// Teacher Dashboard Screen - Responsive main overview screen for teachers.
-///
-/// Features:
-/// - Responsive layout that adapts to screen sizes
-/// - Adaptive grid layouts for stats and courses
-/// - Mobile, tablet, and desktop optimized views
-/// - Welcome header with gradient (matches Student theme)
-/// - Quick statistics cards with AppColors
-/// - Today's lectures list with search
-/// - QR code generation for attendance
-/// - Theme-aware styling (light/dark mode)
-/// - Modern animations and transitions
+
 class TeacherDashboardScreen extends StatefulWidget {
   final String facultyName;
   final String facultyId;
-  final String role; // 'faculty' or 'teacher_assistant'
+  final String role;
 
   const TeacherDashboardScreen({
     super.key,
@@ -87,31 +76,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
 
   Future<void> _loadProfileAndStatistics() async {
     try {
-      final userResponse = await _imageService.supabase
-          .from(widget.role == 'teacher_assistant'
-          ? 'TeacherAssistant'
-          : 'Faculty')
-          .select('UserId')
-          .eq(widget.role == 'teacher_assistant' ? 'TAId' : 'FacultyId',
-          widget.facultyId)
-          .maybeSingle();
-
-      if (userResponse != null) {
-        final userId = userResponse['UserId'];
-        final imageUrl = await _imageService.getProfileImage(userId);
-
-        if (mounted) {
-          setState(() {
-            _profileImageUrl = imageUrl;
-          });
-        }
-      }
+      final imageUrl = await _imageService.getProfileImage(widget.facultyId);
 
       final stats = await _statisticsService.getAllStatistics(
           widget.facultyId, widget.role);
 
       if (mounted) {
         setState(() {
+          _profileImageUrl = imageUrl;
           _activeSessions = stats['activeSessions'] ?? 0;
           _totalStudents = stats['totalStudents'] ?? 0;
           _loadingStats = false;
@@ -154,6 +126,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
               widget.facultyId,
               widget.role,
             );
+            await _loadProfileAndStatistics();
           },
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -179,14 +152,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
     final width = constraints.maxWidth;
     final isDesktop = width >= ResponsiveBreakpoints.desktop;
     final isTablet = width >= ResponsiveBreakpoints.tablet && !isDesktop;
-    final isMobile = width < ResponsiveBreakpoints.tablet;
 
-    // Responsive padding
-    final horizontalPadding = isDesktop
-        ? 32.0
-        : isTablet
-        ? 24.0
-        : 16.0;
+    final horizontalPadding = isDesktop ? 32.0 : isTablet ? 24.0 : 16.0;
 
     if (isDesktop) {
       return _buildDesktopLayout(
@@ -221,17 +188,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header and Stats Row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Welcome Header
                   Expanded(
                     flex: 2,
                     child: _buildWelcomeHeader(isDark, isCompact: false),
                   ),
                   const SizedBox(width: 24),
-                  // Quick Statistics
                   Expanded(
                     flex: 1,
                     child: BlocBuilder<TeacherDashboardCubit,
@@ -250,8 +214,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                 ],
               ),
               const SizedBox(height: 32),
-
-              // Section Header and Search
               Row(
                 children: [
                   Expanded(child: _buildSectionHeader(colorScheme)),
@@ -263,8 +225,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                 ],
               ),
               const SizedBox(height: 24),
-
-              // Courses Grid
               BlocBuilder<TeacherDashboardCubit, TeacherDashboardState>(
                 builder: (context, state) {
                   if (state is TeacherDashboardLoading) {
@@ -278,13 +238,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                       ),
                     );
                   } else if (state is TeacherDashboardLoaded) {
-                    final activeCourses = state.courses;
-                    final filteredCourses = _filterCourses(activeCourses);
-
+                    final filteredCourses = _filterCourses(state.courses);
                     if (filteredCourses.isEmpty) {
                       return _buildEmptyState(colorScheme, isDark);
                     }
-
                     return _buildCoursesGrid(
                       filteredCourses,
                       colorScheme,
@@ -292,7 +249,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                       crossAxisCount: 2,
                     );
                   } else if (state is TeacherDashboardError) {
-                    return _buildErrorState(state.message, colorScheme, isDark);
+                    return _buildErrorState(
+                        state.message, colorScheme, isDark);
                   }
                   return const SizedBox();
                 },
@@ -316,11 +274,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome Header
           _buildWelcomeHeader(isDark, isCompact: !isTablet),
           const SizedBox(height: 24),
-
-          // Quick Statistics
           BlocBuilder<TeacherDashboardCubit, TeacherDashboardState>(
             builder: (context, state) {
               if (state is TeacherDashboardLoaded) {
@@ -334,16 +289,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
             },
           ),
           const SizedBox(height: 24),
-
-          // Section Header
           _buildSectionHeader(colorScheme),
           const SizedBox(height: 12),
-
-          // Search Bar
           _buildSearchBar(colorScheme, isDark),
           const SizedBox(height: 16),
-
-          // Courses List/Grid
           BlocBuilder<TeacherDashboardCubit, TeacherDashboardState>(
             builder: (context, state) {
               if (state is TeacherDashboardLoading) {
@@ -357,13 +306,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                   ),
                 );
               } else if (state is TeacherDashboardLoaded) {
-                final activeCourses = state.courses;
-                final filteredCourses = _filterCourses(activeCourses);
-
+                final filteredCourses = _filterCourses(state.courses);
                 if (filteredCourses.isEmpty) {
                   return _buildEmptyState(colorScheme, isDark);
                 }
-
                 if (isTablet) {
                   return _buildCoursesGrid(
                     filteredCourses,
@@ -418,7 +364,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
         children: [
           Row(
             children: [
-              // Profile Image
               Container(
                 width: isCompact ? 48 : 56,
                 height: isCompact ? 48 : 56,
@@ -432,8 +377,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child:
-                  _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                  child: _profileImageUrl != null &&
+                      _profileImageUrl!.isNotEmpty
                       ? _buildProfileImage(_profileImageUrl!)
                       : Icon(
                     Icons.person_rounded,
@@ -723,8 +668,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
             label,
             style: TextStyle(
               fontSize: isCompact ? 9 : 10,
-              color:
-              isDark ? Colors.grey[400] : AppColors.tertiaryLightGray,
+              color: isDark
+                  ? Colors.grey[400]
+                  : AppColors.tertiaryLightGray,
               fontWeight: FontWeight.w500,
             ),
             textAlign: TextAlign.center,
@@ -771,6 +717,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                 widget.facultyId,
                 widget.role,
               );
+              _loadProfileAndStatistics();
             },
             borderRadius: BorderRadius.circular(10),
             child: Container(
@@ -905,7 +852,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
               ),
             );
           },
-          child: _buildCourseCard(course, colorScheme, isDark, isGrid: true),
+          child: _buildCourseCard(
+            course,
+            colorScheme,
+            isDark,
+            isGrid: true,
+          ),
         );
       },
     );
@@ -938,7 +890,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
         child: InkWell(
           onTap: () => _showSessionConfigDialog(
             context,
-            course.lectureOfferingId,
+            course.offeringId,
             course.courseTitle,
             course.courseCode,
           ),
@@ -947,9 +899,15 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
             padding: const EdgeInsets.all(18),
             child: isGrid
                 ? _buildCourseCardContentVertical(
-                course, colorScheme, isDark)
+              course,
+              colorScheme,
+              isDark,
+            )
                 : _buildCourseCardContentHorizontal(
-                course, colorScheme, isDark),
+              course,
+              colorScheme,
+              isDark,
+            ),
           ),
         ),
       ),
@@ -996,7 +954,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
               ),
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.secondaryOrange
                       .withOpacity(isDark ? 0.2 : 0.1),
@@ -1123,7 +1082,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.secondaryOrange.withOpacity(isDark ? 0.2 : 0.1),
+            color:
+            AppColors.secondaryOrange.withOpacity(isDark ? 0.2 : 0.1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
@@ -1188,8 +1148,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
             const SizedBox(height: 24),
             Text(
               _searchQuery.isEmpty
-                  ? 'No lectures scheduled for today'
-                  : 'No lectures found',
+                  ? 'No lectures/sections scheduled for today'
+                  : 'No items found',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
@@ -1258,6 +1218,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                   widget.facultyId,
                   widget.role,
                 );
+                _loadProfileAndStatistics();
               },
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
@@ -1280,7 +1241,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
 
   void _showSessionConfigDialog(
       BuildContext context,
-      String lectureOfferingId,
+      String instanceId, // Changed from offeringId to instanceId
       String courseTitle,
       String courseCode,
       ) {
@@ -1431,7 +1392,11 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
                         int.tryParse(durationController.text) ?? 10;
                     Navigator.pop(ctx);
                     _startSession(
-                        context, lectureOfferingId, courseTitle, duration);
+                      context,
+                      instanceId, // Changed from offeringId
+                      courseTitle,
+                      duration,
+                    );
                   },
                   icon: const Icon(Icons.qr_code_2_rounded, size: 20),
                   label: const Text('Generate QR'),
@@ -1473,7 +1438,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
               onPressed: () {
                 final duration = int.tryParse(durationController.text) ?? 10;
                 Navigator.pop(ctx);
-                _startSession(context, lectureOfferingId, courseTitle, duration);
+                _startSession(
+                  context,
+                  instanceId, // Changed from offeringId
+                  courseTitle,
+                  duration,
+                );
               },
               icon: const Icon(Icons.qr_code_2_rounded, size: 20),
               label: const Text('Generate QR'),
@@ -1494,8 +1464,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
     );
   }
 
-  Future<void> _startSession(BuildContext context, String lectureOfferingId,
-      String courseTitle, int durationMinutes) async {
+  Future<void> _startSession(
+      BuildContext context,
+      String instanceId, // Changed from offeringId to instanceId
+      String courseTitle,
+      int durationMinutes,
+      ) async {
     try {
       showDialog(
         context: context,
@@ -1505,23 +1479,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
         ),
       );
 
-      final sessionId = 'LINST-${DateTime.now().millisecondsSinceEpoch}';
-      final now = DateTime.now();
-      final expiresAt = now.add(Duration(minutes: durationMinutes));
-
-      await _imageService.supabase.from('LectureInstance').insert({
-        'InstanceId': sessionId,
-        'LectureOfferingId': lectureOfferingId,
-        'MeetingDate': now.toIso8601String().split('T')[0],
-        'StartTime':
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00',
-        'EndTime':
-        '${expiresAt.hour.toString().padLeft(2, '0')}:${expiresAt.minute.toString().padLeft(2, '0')}:00',
-        'Topic': 'Live Session - $courseTitle',
-        'QRCode': sessionId,
-        'QRExpiresAt': expiresAt.toUtc().toIso8601String(),
-        'IsCancelled': false,
-      });
+      // The instance already exists in the database (created by scheduling system)
+      // We just need to navigate to the QR screen with the instance ID
 
       if (context.mounted) {
         Navigator.pop(context);
@@ -1532,7 +1491,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
             builder: (_) => BlocProvider.value(
               value: context.read<LiveAttendanceCubit>(),
               child: LiveAttendanceScreen(
-                sessionId: sessionId,
+                sessionId: instanceId, // Use the existing instance ID
                 courseTitle: courseTitle,
                 durationMinutes: durationMinutes,
               ),
@@ -1540,19 +1499,22 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen>
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Error starting session: $e');
+      print('📍 Stack trace: $stackTrace');
+
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error starting session: $e'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     }
   }
-
   Widget _buildProfileImage(String base64Image) {
     try {
       final base64Data = base64Image.contains('base64,')

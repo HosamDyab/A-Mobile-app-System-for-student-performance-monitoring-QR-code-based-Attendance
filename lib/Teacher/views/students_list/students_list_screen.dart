@@ -1,3 +1,5 @@
+// students_list_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -10,8 +12,8 @@ import 'widgets/student_card_widget.dart';
 /// Students List Screen - View and manage students.
 ///
 /// Features:
-/// - Search by name, ID, or code
-/// - Filter by level and attendance status
+/// - Search by name, ID, or email
+/// - Filter by level
 /// - Modern card design for student entries
 /// - Theme-aware styling (light/dark mode)
 /// - Works for both Faculty (lectures) and TA (sections)
@@ -40,9 +42,9 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
       if (mounted) {
         try {
           context.read<StudentsBloc>().add(LoadStudentsEvent(
-                facultyId: widget.facultyId,
-                role: widget.role,
-              ));
+            facultyId: widget.facultyId,
+            role: widget.role,
+          ));
         } catch (e) {
           print(
               '❌ Error: StudentsBloc not found. Please HOT RESTART the app (press R).');
@@ -52,7 +54,7 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content:
-                    const Text('Please restart the app (Press R in terminal)'),
+                const Text('Please restart the app (Press R in terminal)'),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 10),
               ),
@@ -189,7 +191,7 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
       child: TextField(
         decoration: InputDecoration(
           prefixIcon: Icon(Icons.search_rounded, color: AppColors.primaryBlue),
-          hintText: 'Search by Name, ID, or Code...',
+          hintText: 'Search by Name, ID, or Email...',
           hintStyle: TextStyle(
             color: colorScheme.onSurface.withOpacity(0.4),
             fontSize: 14,
@@ -205,11 +207,15 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
             borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
           ),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
         style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
         onChanged: (value) {
-          context.read<StudentsBloc>().add(SearchStudentsEvent(value));
+          context.read<StudentsBloc>().add(SearchStudentsEvent(
+            value,
+            facultyId: widget.facultyId,
+            role: widget.role,
+          ));
         },
       ),
     );
@@ -239,7 +245,7 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
                 borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
               ),
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
             dropdownColor: colorScheme.surface,
             items: ['All Levels', 'L1', 'L2', 'L3', 'L4'].map((level) {
@@ -258,10 +264,10 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
               setState(() => _selectedLevel = value);
               try {
                 context.read<StudentsBloc>().add(FilterStudentsEvent(
-                      level: value,
-                      facultyId: widget.facultyId,
-                      role: widget.role,
-                    ));
+                  level: value,
+                  facultyId: widget.facultyId,
+                  role: widget.role,
+                ));
               } catch (e) {
                 print('❌ Error filtering students: $e');
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -274,7 +280,6 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
             },
           ),
         ),
-        // Attendance filter removed as requested
       ],
     );
   }
@@ -416,7 +421,10 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
-              context.read<StudentsBloc>().add(LoadStudentsEvent());
+              context.read<StudentsBloc>().add(LoadStudentsEvent(
+                facultyId: widget.facultyId,
+                role: widget.role,
+              ));
             },
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Retry'),
@@ -433,18 +441,5 @@ class _StudentsListScreenState extends State<StudentsListScreen> {
         ],
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Present':
-        return AppColors.accentGreen;
-      case 'Absent':
-        return AppColors.accentRed;
-      case 'Late':
-        return AppColors.secondaryBlue;
-      default:
-        return AppColors.tertiaryLightGray;
-    }
   }
 }

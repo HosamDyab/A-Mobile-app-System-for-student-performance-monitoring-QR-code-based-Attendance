@@ -427,7 +427,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                             const Icon(Icons.badge_outlined, size: 18, color: Colors.white),
                             const SizedBox(width: 8),
                             Text(
-                              student.studentCode,
+                              student.id,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
@@ -450,7 +450,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                             Icon(Icons.school_outlined, size: 18, color: colorScheme.primary),
                             const SizedBox(width: 6),
                             Text(
-                              student.academicLevel,
+                              " Level : ${student.academicLevel}",
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: colorScheme.primary,
                                 fontWeight: FontWeight.w600,

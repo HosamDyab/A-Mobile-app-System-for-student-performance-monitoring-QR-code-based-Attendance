@@ -473,7 +473,7 @@ class TeacherProfileScreen extends StatelessWidget {
         builder: (_) => BlocProvider.value(
           value: context.read<TeacherAssistantCubit>(),
           child: TeacherAssistantListScreen(
-            facultyId: role == 'faculty' ? facultyId : null,
+          //  facultyId: role == 'faculty' ? facultyId : null,
           ),
         ),
       ),

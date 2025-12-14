@@ -27,45 +27,58 @@ class LiveAttendanceScreen extends StatefulWidget {
 class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
   int _secondsRemaining = 0;
   late Timer _timer;
-  late Timer _refreshTimer;
   bool _isEndingSession = false;
   bool _isSessionEnded = false;
+
 
   @override
   void initState() {
     super.initState();
+
+    print('🔍 ========================================');
+    print('🔍 SESSION ID DEBUG');
+    print('🔍 ========================================');
+    print('📱 Screen initialized with:');
+    print('   - Session ID: ${widget.sessionId}');
+    print('   - Course Title: ${widget.courseTitle}');
+    print('   - Duration: ${widget.durationMinutes} minutes');
+    print('🔍 Session ID format check:');
+    print('   - Starts with L? ${widget.sessionId.toUpperCase().startsWith("L")}');
+    print('   - Starts with S? ${widget.sessionId.toUpperCase().startsWith("S")}');
+    print('   - Length: ${widget.sessionId.length}');
+    print('🔍 ========================================');
+
+    // Set initial timer
     _secondsRemaining = widget.durationMinutes * 60;
+
+    // Start countdown timer
     startTimer();
-    startAutoRefresh();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        print('🔄 Initial attendance fetch for: ${widget.sessionId}');
-        context.read<LiveAttendanceCubit>().fetchAttend(widget.sessionId);
-      }
-    });
+    // Start polling for attendance updates every 3 seconds
+    context.read<LiveAttendanceCubit>().startPolling(
+      widget.sessionId,
+      intervalSeconds: 3,
+    );
   }
-
   @override
   void dispose() {
+    print('📱 LiveAttendanceScreen disposed - stopping polling');
+
+    // Stop polling when leaving the screen
+    context.read<LiveAttendanceCubit>().stopPolling();
+
+    // Cancel timers
     if (_timer.isActive) {
       _timer.cancel();
     }
-    if (_refreshTimer.isActive) {
-      _refreshTimer.cancel();
-    }
+
     super.dispose();
   }
 
-  void startAutoRefresh() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (!mounted || _isSessionEnded) {
-        timer.cancel();
-        return;
-      }
-      print('🔄 Auto-refreshing attendance...');
-      context.read<LiveAttendanceCubit>().fetchAttend(widget.sessionId);
-    });
+  // Manual refresh method
+  void _refreshAttendance() {
+    print('🔄 Manual refresh triggered');
+    context.read<LiveAttendanceCubit>().fetchAttend(widget.sessionId);
   }
 
   void startTimer() {
@@ -106,6 +119,9 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
     if (_timer.isActive) {
       _timer.cancel();
     }
+
+    // Stop polling when session ends
+    context.read<LiveAttendanceCubit>().stopPolling();
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -263,7 +279,6 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
         ),
         actions: isSmallScreen
             ? [
-          // Stack buttons vertically on small screens
           SizedBox(
             width: double.infinity,
             child: Column(
@@ -386,19 +401,27 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
     final orientation = MediaQuery.of(context).orientation;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Responsive breakpoints
     final isTablet = size.width >= 600;
     final isDesktop = size.width >= 1024;
     final isLandscape = orientation == Orientation.landscape;
 
-    // Adaptive sizing
     final qrSize = isDesktop ? 250.0 : (isTablet ? 220.0 : 200.0);
     final horizontalPadding = isDesktop ? 40.0 : (isTablet ? 24.0 : 20.0);
     final attendanceListHeight = isDesktop ? 400.0 : (isTablet ? 350.0 : 300.0);
 
     return Scaffold(
       backgroundColor: isDark ? null : Colors.grey[50],
-      appBar: CustomAppBar(title: widget.courseTitle),
+      appBar: CustomAppBar(
+        title: widget.courseTitle,
+        actions: [
+          // Add manual refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _refreshAttendance,
+            tooltip: 'Refresh Attendance',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: isLandscape && !isTablet
             ? _buildLandscapeLayout(context, isDark, qrSize, horizontalPadding, attendanceListHeight)
@@ -410,7 +433,6 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
   Widget _buildLandscapeLayout(BuildContext context, bool isDark, double qrSize, double horizontalPadding, double attendanceListHeight) {
     return Row(
       children: [
-        // Left side - QR Code and Timer
         Expanded(
           flex: 1,
           child: SingleChildScrollView(
@@ -427,7 +449,6 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
             ),
           ),
         ),
-        // Right side - Attendance List
         Expanded(
           flex: 1,
           child: Padding(
@@ -810,13 +831,29 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
             color: _isSessionEnded ? Colors.grey.shade300 : const Color(0xFFFFFACD),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(
-            _isSessionEnded ? "Closed" : "Live",
-            style: TextStyle(
-              color: _isSessionEnded ? Colors.black54 : const Color(0xFFFF6B00),
-              fontWeight: FontWeight.bold,
-              fontSize: isSmallScreen ? 12 : 14,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!_isSessionEnded) ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFF6B00),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                _isSessionEnded ? "Closed" : "Live",
+                style: TextStyle(
+                  color: _isSessionEnded ? Colors.black54 : const Color(0xFFFF6B00),
+                  fontWeight: FontWeight.bold,
+                  fontSize: isSmallScreen ? 12 : 14,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -833,13 +870,64 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
           }
 
           if (state is LiveAttendanceError) {
-            return Center(child: Text("Error: ${state.message}"));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Error: ${state.message}",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _refreshAttendance,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
           }
 
           if (state is LiveAttendanceLoaded) {
             if (state.attendanceList.isEmpty) {
-              return const Center(child: Text("No students joined yet."));
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.people_outline,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "No students joined yet.",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Waiting for scans...",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              );
             }
+
             return ListView.builder(
               itemCount: state.attendanceList.length,
               itemBuilder: (context, index) {
@@ -852,14 +940,26 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                   padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade100,
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: isSmallScreen ? 16 : 20,
-                        child: Icon(Icons.person, size: isSmallScreen ? 16 : 18),
+                        radius: isSmallScreen ? 18 : 22,
+                        backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
+                        child: Icon(
+                          Icons.person,
+                          size: isSmallScreen ? 18 : 22,
+                          color: AppColors.primaryBlue,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -873,11 +973,12 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                                 fontSize: isSmallScreen ? 13 : 14,
                               ),
                             ),
+                            const SizedBox(height: 4),
                             Text(
-                              "${a.studentCode ?? a.studentId} • ${a.scanTime.toLocal().toString().split('.')[0]}",
+                              "${a.studentCode ?? a.studentId} • ${_formatTime(a.scanTime)}",
                               style: TextStyle(
                                 fontSize: isSmallScreen ? 11 : 12,
-                                color: Colors.grey,
+                                color: Colors.grey[600],
                               ),
                             ),
                           ],
@@ -895,10 +996,25 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
             );
           }
 
-          return const Center(child: Text("Waiting for scans..."));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  color: AppColors.primaryBlue,
+                ),
+                const SizedBox(height: 16),
+                const Text("Initializing session..."),
+              ],
+            ),
+          );
         },
       ),
     );
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildActionButton(BuildContext context) {
@@ -977,17 +1093,39 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
-        title: Text(
-          "Set Session Time",
-          style: TextStyle(fontSize: isSmallScreen ? 16 : 18),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primaryBlue, AppColors.accentPurple],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.timer_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              "Set Session Time",
+              style: TextStyle(fontSize: isSmallScreen ? 16 : 18),
+            ),
+          ],
         ),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: "Minutes",
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.timer),
+            border: const OutlineInputBorder(),
+            prefixIcon: Icon(
+              Icons.timer,
+              color: AppColors.primaryBlue,
+            ),
           ),
           autofocus: true,
         ),
@@ -1001,11 +1139,19 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
               final value = controller.text;
               final mins = int.tryParse(value) ?? 0;
               if (mins > 0) {
-                setState(() => _secondsRemaining = mins * 60);
+                setState(() {
+                  _secondsRemaining = mins * 60;
+                  // Restart timer with new duration
+                  if (_timer.isActive) {
+                    _timer.cancel();
+                  }
+                  startTimer();
+                });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Session time set to $mins minutes'),
                     duration: const Duration(seconds: 2),
+                    backgroundColor: AppColors.accentGreen,
                   ),
                 );
               }

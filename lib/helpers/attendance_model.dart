@@ -2,30 +2,34 @@ import 'Attendance.dart';
 
 class AttendanceModel extends Attendance {
   AttendanceModel({
-    required super.attendanceId,
     required super.studentId,
     required super.instanceId,
     required super.scanTime,
     required super.status,
   });
 
+  // ============================================================
+  // FACTORY FOR NEW SCHEMA (lectureattendance + sectionattendance)
+  // ============================================================
   factory AttendanceModel.fromJson(Map<String, dynamic> json) {
     return AttendanceModel(
-      attendanceId: json['AttendanceId'] ?? '',
-      studentId: json['StudentId'] ?? '',
-      instanceId: json['InstanceId'] ?? '',
-      scanTime: json['ScanTime'] != null
-          ? DateTime.parse(json['ScanTime']).toLocal()
+      studentId: json['studentid'] ?? '',
+      instanceId: json['linstanceid'] ?? json['sinstanceid'] ?? '',
+      scanTime: json['scannedat'] != null
+          ? DateTime.parse(json['scannedat']).toLocal()
           : DateTime.now(),
-      status: json['Status'] ?? 'Unknown',
+      status: (json['ispresent'] == true) ? 'Present' : 'Absent',
     );
   }
 
+  // ============================================================
+  // CONVERT TO JSON (IF NEEDED)
+  // ============================================================
   Map<String, dynamic> toJson() => {
-    'AttendanceId': attendanceId,
-    'StudentId': studentId,
-    'InstanceId': instanceId,
-    'ScanTime': scanTime.toUtc().toIso8601String(),
-    'Status': status,
+    'studentid': studentId,
+    // choose correct column depending on type:
+    'instanceid': instanceId,
+    'scannedat': scanTime.toUtc().toIso8601String(),
+    'ispresent': status == 'Present',
   };
 }

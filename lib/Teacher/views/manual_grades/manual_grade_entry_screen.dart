@@ -6,11 +6,13 @@ import '../widgets/custom_app_bar.dart';
 
 /// Manual Grade Entry Screen - Enter grades for students manually.
 ///
-/// Features:
-/// - Course selection dropdown
-/// - Grade type selection (Midterm, Quiz, Assignment, etc.)
-/// - Student list with grade input and search
-/// - Theme-aware styling (light/dark mode)
+/// FIXES:
+/// 1. Proper yearwork calculation with validation
+/// 2. Grade component limits enforced
+/// 3. TA submission blocked properly with clear messaging
+/// 4. Lab score only enabled when course has lab
+/// 5. Proper total grade calculation
+/// 6. Better error handling and validation
 class ManualGradeEntryScreen extends StatefulWidget {
   final String facultyId;
   final String role;
@@ -34,6 +36,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
   final Map<String, Map<String, TextEditingController>> _gradeControllers = {};
 
   String? _selectedCourse;
+  String? _selectedCourseName;
   bool _courseHasLab = false;
   bool _courseHasMiniProject = false;
 
@@ -70,19 +73,20 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
     try {
       if (widget.role == 'faculty') {
         final response = await _supabase
-            .from('LectureCourseOffering')
-            .select('*, Course(*)')
-            .eq('FacultyId', widget.facultyId);
+            .from('lecturecourseoffering')
+            .select('lectureofferingid, coursecode, academicyear, semester, course(coursecode, coursename, haslab)')
+            .eq('facultysnn', widget.facultyId);
 
         setState(() {
           _courses = List<Map<String, dynamic>>.from(response as List);
           _isLoading = false;
         });
       } else {
+        // For TA, get sections they're assigned to
         final response = await _supabase
-            .from('SectionCourseOffering')
-            .select('*, Course(*)')
-            .eq('TAId', widget.facultyId);
+            .from('sectionta')
+            .select('sectionofferingid, sectioncourseoffering(sectionofferingid, coursecode, groupnumber, course(coursecode, coursename, haslab))')
+            .eq('tasnn', widget.facultyId);
 
         setState(() {
           _courses = List<Map<String, dynamic>>.from(response as List);
@@ -135,86 +139,28 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       List<Map<String, dynamic>> studentsList = [];
 
       if (widget.role == 'faculty') {
-        // For Faculty: Try to get students from sections linked to this lecture
-        try {
-          final sectionsResponse = await _supabase
-              .from('SectionCourseOffering')
-              .select('SectionOfferingId')
-              .eq('LectureOfferingId', _selectedCourse!);
-
-          final sectionIds = (sectionsResponse as List)
-              .map((s) => s['SectionOfferingId'])
-              .whereType<dynamic>()
-              .toList();
-
-          if (sectionIds.isNotEmpty) {
-            final studentsResponse = await _supabase
-                .from('StudentSection')
-                .select(
-                    'StudentId, Student(StudentId, StudentCode, User(FullName))')
-                .inFilter('SectionOfferingId', sectionIds);
-
-            studentsList =
-                List<Map<String, dynamic>>.from(studentsResponse as List);
-          }
-        } catch (e) {
-          debugPrint('Section query failed, trying direct student load: $e');
-        }
-
-        // If no students found via sections, try loading all students
-        if (studentsList.isEmpty) {
-          try {
-            final allStudentsResponse = await _supabase
-                .from('Student')
-                .select('StudentId, StudentCode, User(FullName)')
-                .limit(100);
-
-            studentsList = (allStudentsResponse as List).map((s) {
-              return {
-                'StudentId': s['StudentId'],
-                'Student': {
-                  'StudentId': s['StudentId'],
-                  'StudentCode': s['StudentCode'],
-                  'User': s['User'],
-                },
-              };
-            }).toList();
-          } catch (e) {
-            debugPrint('Direct student load failed: $e');
-          }
-        }
-      } else {
-        // For TA: Get students from this section directly
+        // For Faculty: Get students enrolled in this lecture offering
         try {
           final response = await _supabase
-              .from('StudentSection')
-              .select(
-                  'StudentId, Student(StudentId, StudentCode, User(FullName))')
-              .eq('SectionOfferingId', _selectedCourse!);
+              .from('lectureenrollment')
+              .select('studentid, student(studentid, fullname, email)')
+              .eq('lectureofferingid', _selectedCourse!);
 
           studentsList = List<Map<String, dynamic>>.from(response as List);
         } catch (e) {
-          debugPrint('TA section query failed: $e');
-          // Fallback to all students
-          try {
-            final allStudentsResponse = await _supabase
-                .from('Student')
-                .select('StudentId, StudentCode, User(FullName)')
-                .limit(100);
+          debugPrint('Lecture enrollment query failed: $e');
+        }
+      } else {
+        // For TA: Get students enrolled in this section
+        try {
+          final response = await _supabase
+              .from('sectionenrollment')
+              .select('studentid, student(studentid, fullname, email)')
+              .eq('sectionofferingid', _selectedCourse!);
 
-            studentsList = (allStudentsResponse as List).map((s) {
-              return {
-                'StudentId': s['StudentId'],
-                'Student': {
-                  'StudentId': s['StudentId'],
-                  'StudentCode': s['StudentCode'],
-                  'User': s['User'],
-                },
-              };
-            }).toList();
-          } catch (e2) {
-            debugPrint('Fallback student load failed: $e2');
-          }
+          studentsList = List<Map<String, dynamic>>.from(response as List);
+        } catch (e) {
+          debugPrint('Section enrollment query failed: $e');
         }
       }
 
@@ -223,19 +169,31 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       for (var student in studentsList) {
         final studentId = _getStudentId(student);
         if (studentId.isNotEmpty) {
-          _gradeControllers[studentId] = {
-            'Midterm': TextEditingController(),
-            'Quiz1': TextEditingController(),
-            'Quiz2': TextEditingController(),
-            'Quiz3': TextEditingController(),
-            'Assignment1': TextEditingController(),
-            'Assignment2': TextEditingController(),
-            'Assignment3': TextEditingController(),
-            'Lab': TextEditingController(),
-            'MiniProject': TextEditingController(),
-            'Final': TextEditingController(),
-          };
+          _gradeControllers[studentId] = {};
+
+          // Always create these controllers
+          _gradeControllers[studentId]!['Midterm'] = TextEditingController();
+          _gradeControllers[studentId]!['Final'] = TextEditingController();
+
+          // Create dynamic quiz controllers
+          for (int i = 1; i <= 10; i++) {
+            _gradeControllers[studentId]!['Quiz$i'] = TextEditingController();
+          }
+
+          // Create dynamic assignment controllers
+          for (int i = 1; i <= 10; i++) {
+            _gradeControllers[studentId]!['Assignment$i'] = TextEditingController();
+          }
+
+          // Optional controllers
+          _gradeControllers[studentId]!['Lab'] = TextEditingController();
+          _gradeControllers[studentId]!['MiniProject'] = TextEditingController();
         }
+      }
+
+      // Load existing grades if faculty
+      if (widget.role == 'faculty') {
+        await _loadExistingGrades(studentsList);
       }
 
       setState(() {
@@ -252,6 +210,45 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
     }
   }
 
+  Future<void> _loadExistingGrades(List<Map<String, dynamic>> students) async {
+    if (_selectedCourse == null) return;
+
+    try {
+      final response = await _supabase
+          .from('evaluationsheet')
+          .select('studentid, midterm, yearwork, labscore, finalexam')
+          .eq('lectureofferingid', _selectedCourse!);
+
+      final grades = List<Map<String, dynamic>>.from(response as List);
+
+      for (var grade in grades) {
+        final studentId = grade['studentid']?.toString();
+        if (studentId != null && _gradeControllers.containsKey(studentId)) {
+          final controllers = _gradeControllers[studentId]!;
+
+          // Set midterm
+          if (grade['midterm'] != null) {
+            controllers['Midterm']?.text = grade['midterm'].toString();
+          }
+
+          // Set final
+          if (grade['finalexam'] != null) {
+            controllers['Final']?.text = grade['finalexam'].toString();
+          }
+
+          // Set lab score if applicable
+          if (grade['labscore'] != null && _courseHasLab) {
+            controllers['Lab']?.text = grade['labscore'].toString();
+          }
+
+          // Note: yearwork is calculated from components, so we don't load it
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading existing grades: $e');
+    }
+  }
+
   void _filterStudents(String query) {
     setState(() {
       _searchQuery = query;
@@ -260,26 +257,27 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       } else {
         _filteredStudents = _allStudents.where((student) {
           final name = _getStudentName(student).toLowerCase();
-          final code = _getStudentCode(student).toLowerCase();
+          final id = _getStudentId(student).toLowerCase();
           final searchLower = query.toLowerCase();
-          return name.contains(searchLower) || code.contains(searchLower);
+          return name.contains(searchLower) || id.contains(searchLower);
         }).toList();
       }
     });
   }
 
   String _getStudentName(Map<String, dynamic> student) {
-    final studentData = student['Student'] as Map<String, dynamic>?;
-    return studentData?['User']?['FullName'] ?? 'Unknown Student';
-  }
-
-  String _getStudentCode(Map<String, dynamic> student) {
-    final studentData = student['Student'] as Map<String, dynamic>?;
-    return studentData?['StudentCode'] ?? 'N/A';
+    final studentData = student['student'] as Map<String, dynamic>?;
+    return studentData?['fullname'] ?? 'Unknown Student';
   }
 
   String _getStudentId(Map<String, dynamic> student) {
-    return student['StudentId']?.toString() ?? '';
+    return student['studentid']?.toString() ?? '';
+  }
+
+  bool _validateGrade(String value, int maxGrade) {
+    final grade = double.tryParse(value);
+    if (grade == null) return false;
+    return grade >= 0 && grade <= maxGrade;
   }
 
   Future<void> _submitGrades() async {
@@ -288,11 +286,77 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       return;
     }
 
+    // Only faculty can submit to evaluationsheet
+    if (widget.role != 'faculty') {
+      _showSnackBar(
+        'Only faculty can submit grades. TAs can view and prepare grades but cannot save to evaluation sheet.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Validate all grades before submission
+    List<String> errors = [];
+    for (var student in _filteredStudents) {
+      final studentId = _getStudentId(student);
+      final controllers = _gradeControllers[studentId];
+      if (controllers == null) continue;
+
+      // Validate midterm (max 20)
+      final midtermText = controllers['Midterm']?.text ?? '';
+      if (midtermText.isNotEmpty && !_validateGrade(midtermText, 20)) {
+        errors.add('${_getStudentName(student)}: Invalid midterm grade (max 20)');
+      }
+
+      // Validate quizzes (max 5 each)
+      for (int i = 1; i <= _quizCount; i++) {
+        final quizText = controllers['Quiz$i']?.text ?? '';
+        if (quizText.isNotEmpty && !_validateGrade(quizText, 5)) {
+          errors.add('${_getStudentName(student)}: Invalid Quiz$i grade (max 5)');
+        }
+      }
+
+      // Validate assignments (max 5 each)
+      for (int i = 1; i <= _assignmentCount; i++) {
+        final assignText = controllers['Assignment$i']?.text ?? '';
+        if (assignText.isNotEmpty && !_validateGrade(assignText, 5)) {
+          errors.add('${_getStudentName(student)}: Invalid Assignment$i grade (max 5)');
+        }
+      }
+
+      // Validate lab (max 10)
+      if (_courseHasLab) {
+        final labText = controllers['Lab']?.text ?? '';
+        if (labText.isNotEmpty && !_validateGrade(labText, 10)) {
+          errors.add('${_getStudentName(student)}: Invalid lab grade (max 10)');
+        }
+      }
+
+      // Validate mini project (max 10)
+      if (_courseHasMiniProject) {
+        final projectText = controllers['MiniProject']?.text ?? '';
+        if (projectText.isNotEmpty && !_validateGrade(projectText, 10)) {
+          errors.add('${_getStudentName(student)}: Invalid mini project grade (max 10)');
+        }
+      }
+
+      // Validate final (max 50 with lab, 60 without)
+      final finalMax = _courseHasLab ? 50 : 60;
+      final finalText = controllers['Final']?.text ?? '';
+      if (finalText.isNotEmpty && !_validateGrade(finalText, finalMax)) {
+        errors.add('${_getStudentName(student)}: Invalid final grade (max $finalMax)');
+      }
+    }
+
+    if (errors.isNotEmpty) {
+      _showSnackBar('Validation errors: ${errors.first}', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final gradeUpdates = <Map<String, dynamic>>[];
-      final isFaculty = widget.role == 'faculty';
 
       for (var student in _filteredStudents) {
         final studentId = _getStudentId(student);
@@ -301,41 +365,70 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
         final controllers = _gradeControllers[studentId];
         if (controllers == null) continue;
 
-        // Calculate Year_Work from all components
+        // Calculate yearwork from all components (quizzes + assignments + miniproject)
         double yearWork = 0;
+
+        // Add quiz grades
         for (int i = 1; i <= _quizCount; i++) {
           yearWork += double.tryParse(controllers['Quiz$i']?.text ?? '0') ?? 0;
         }
+
+        // Add assignment grades
         for (int i = 1; i <= _assignmentCount; i++) {
           yearWork += double.tryParse(controllers['Assignment$i']?.text ?? '0') ?? 0;
         }
-        if (_courseHasLab) {
-          yearWork += double.tryParse(controllers['Lab']?.text ?? '0') ?? 0;
-        }
+
+        // Add mini project if applicable
         if (_courseHasMiniProject) {
           yearWork += double.tryParse(controllers['MiniProject']?.text ?? '0') ?? 0;
         }
 
-        // Create grade data with correct foreign key based on role
+        final midterm = double.tryParse(controllers['Midterm']?.text ?? '0') ?? 0;
+        final finalExam = double.tryParse(controllers['Final']?.text ?? '0') ?? 0;
+        final labScore = _courseHasLab
+            ? (double.tryParse(controllers['Lab']?.text ?? '0') ?? 0)
+            : null;
+
+        // Calculate total grade
+        // Total = Midterm (20) + YearWork (varies) + Lab (10 if exists) + Final (50 or 60)
+        double totalGrade = midterm + yearWork + finalExam;
+        if (labScore != null) {
+          totalGrade += labScore;
+        }
+
+        // Skip if no grades entered at all
+        if (midterm == 0 && yearWork == 0 && finalExam == 0 && (labScore == null || labScore == 0)) {
+          continue;
+        }
+
+        // Create grade data for evaluationsheet
         final gradeData = <String, dynamic>{
-          'StudentId': studentId,
-          'Midterm': double.tryParse(controllers['Midterm']?.text ?? '0') ?? 0,
-          'Final': double.tryParse(controllers['Final']?.text ?? '0') ?? 0,
-          'Year_Work': yearWork,
-          // Add the correct offering ID key based on role
-          if (isFaculty) 'LectureOfferingId': _selectedCourse
-          else 'SectionOfferingId': _selectedCourse,
+          'studentid': studentId,
+          'lectureofferingid': _selectedCourse,
+          'midterm': midterm,
+          'yearwork': yearWork,
+          'finalexam': finalExam,
+          'totalgrade': totalGrade,
         };
+
+        if (labScore != null) {
+          gradeData['labscore'] = labScore;
+        }
 
         gradeUpdates.add(gradeData);
       }
 
-      // Insert into correct table based on role
-      if (isFaculty) {
-        await _supabase.from('LectureGrade').upsert(gradeUpdates);
-      } else {
-        await _supabase.from('SectionGrade').upsert(gradeUpdates);
+      if (gradeUpdates.isEmpty) {
+        setState(() => _isLoading = false);
+        _showSnackBar('No grades to save', isError: true);
+        return;
       }
+
+      // Upsert into evaluationsheet
+      await _supabase.from('evaluationsheet').upsert(
+        gradeUpdates,
+        onConflict: 'studentid,lectureofferingid',
+      );
 
       setState(() => _isLoading = false);
 
@@ -385,50 +478,56 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
       appBar: const CustomAppBar(title: 'Manual Grade Entry'),
       body: _isLoading
           ? Center(
-              child: CircularProgressIndicator(color: AppColors.primaryBlue))
+          child: CircularProgressIndicator(color: AppColors.primaryBlue))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Card
-                  _buildHeaderCard(colorScheme, isDark),
-                  const SizedBox(height: 24),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Card
+            _buildHeaderCard(colorScheme, isDark),
+            const SizedBox(height: 24),
 
-                  // Course Selection
-                  _buildCourseSelection(colorScheme, isDark),
-                  const SizedBox(height: 20),
+            // Course Selection
+            _buildCourseSelection(colorScheme, isDark),
+            const SizedBox(height: 20),
 
-                  // Course Settings (Lab & Mini Project)
-                  if (_selectedCourse != null) ...[
-                    _buildCourseSettings(colorScheme, isDark),
-                    const SizedBox(height: 20),
-                  ],
+            // Course Settings (Lab & Mini Project)
+            if (_selectedCourse != null) ...[
+              _buildCourseSettings(colorScheme, isDark),
+              const SizedBox(height: 20),
+            ],
 
-                  // Grade Type Selector and Students List
-                  if (_allStudents.isNotEmpty) ...[
-                    _buildGradeTypeSelector(colorScheme, isDark),
-                    const SizedBox(height: 20),
+            // Grade Type Selector and Students List
+            if (_allStudents.isNotEmpty) ...[
+              _buildGradeTypeSelector(colorScheme, isDark),
+              const SizedBox(height: 20),
 
-                    // Student Search
-                    _buildStudentSearch(colorScheme, isDark),
-                    const SizedBox(height: 16),
+              // Student Search
+              _buildStudentSearch(colorScheme, isDark),
+              const SizedBox(height: 16),
 
-                    // Students List with Grade Input
-                    _buildStudentsList(colorScheme, isDark),
-                    const SizedBox(height: 24),
+              // Students List with Grade Input
+              _buildStudentsList(colorScheme, isDark),
+              const SizedBox(height: 24),
 
-                    // Submit Button
-                    _buildSubmitButton(),
-                  ],
+              // Submit Button
+              _buildSubmitButton(),
 
-                  if (_selectedCourse != null &&
-                      _allStudents.isEmpty &&
-                      !_isLoading)
-                    _buildEmptyState(colorScheme, isDark),
-                ],
-              ),
-            ),
+              // TA Warning
+              if (widget.role != 'faculty') ...[
+                const SizedBox(height: 12),
+                _buildTAWarning(colorScheme, isDark),
+              ],
+            ],
+
+            if (_selectedCourse != null &&
+                _allStudents.isEmpty &&
+                !_isLoading)
+              _buildEmptyState(colorScheme, isDark),
+          ],
+        ),
+      ),
     );
   }
 
@@ -474,7 +573,9 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Enter grades for students manually',
+                  widget.role == 'faculty'
+                      ? 'Enter grades for students'
+                      : 'View and prepare grades (TAs cannot submit)',
                   style: TextStyle(
                     fontSize: 13,
                     color: colorScheme.onSurface.withOpacity(0.6),
@@ -515,23 +616,30 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
             ),
             hintText: isTA ? 'Choose a section' : 'Choose a course',
             hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.4)),
-           // prefixIcon: Icon(Icons.book_rounded, color: AppColors.primaryBlue),
             filled: true,
             fillColor: isDark ? colorScheme.surface : Colors.white,
           ),
           dropdownColor: colorScheme.surface,
           items: _courses.map((course) {
-            final courseData = course['Course'] as Map<String, dynamic>?;
-            final id = widget.role == 'faculty'
-                ? course['LectureOfferingId']?.toString()
-                : course['SectionOfferingId']?.toString();
+            String id;
+            Map<String, dynamic>? courseData;
+
+            if (widget.role == 'faculty') {
+              id = course['lectureofferingid']?.toString() ?? '';
+              courseData = course['course'] as Map<String, dynamic>?;
+            } else {
+              final sectionOffering = course['sectioncourseoffering'] as Map<String, dynamic>?;
+              id = sectionOffering?['sectionofferingid']?.toString() ?? '';
+              courseData = sectionOffering?['course'] as Map<String, dynamic>?;
+            }
+
             return DropdownMenuItem<String>(
               value: id,
               child: Text(
                 courseData != null
-                    ? '${courseData['Code']} - ${courseData['Title']}'
+                    ? '${courseData['coursecode']} - ${courseData['coursename']}'
                     : 'Unknown Course',
-                style: TextStyle(fontSize: 13,color: colorScheme.onSurface),
+                style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
               ),
             );
           }).toList(),
@@ -542,6 +650,26 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
               _filteredStudents.clear();
               _searchController.clear();
               _searchQuery = '';
+
+              // Check if course has lab and get course name
+              if (widget.role == 'faculty') {
+                final selectedCourseData = _courses.firstWhere(
+                      (c) => c['lectureofferingid'] == value,
+                  orElse: () => {},
+                );
+                final courseInfo = selectedCourseData['course'] as Map<String, dynamic>?;
+                _courseHasLab = courseInfo?['haslab'] == 'YES';
+                _selectedCourseName = courseInfo?['coursename'];
+              } else {
+                final selectedCourseData = _courses.firstWhere(
+                      (c) => (c['sectioncourseoffering'] as Map<String, dynamic>?)?['sectionofferingid'] == value,
+                  orElse: () => {},
+                );
+                final sectionOffering = selectedCourseData['sectioncourseoffering'] as Map<String, dynamic>?;
+                final courseInfo = sectionOffering?['course'] as Map<String, dynamic>?;
+                _courseHasLab = courseInfo?['haslab'] == 'YES';
+                _selectedCourseName = courseInfo?['coursename'];
+              }
             });
             _loadStudents();
           },
@@ -580,7 +708,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                     setState(() => _courseHasLab = value ?? false);
                   },
                   title: Text(
-                    'Has Lab',
+                    'Has Lab (10 pts)',
                     style: TextStyle(
                       color: colorScheme.onSurface,
                       fontSize: 14,
@@ -603,7 +731,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                     setState(() => _courseHasMiniProject = value ?? false);
                   },
                   title: Text(
-                    'Has Project',
+                    'Has Project (10 pts)',
                     style: TextStyle(
                       color: colorScheme.onSurface,
                       fontSize: 14,
@@ -620,12 +748,59 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
 
         const SizedBox(height: 12),
 
+        // Grade distribution info
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.accentPurple.withOpacity(isDark ? 0.15 : 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.accentPurple.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: AppColors.accentPurple),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Grade Distribution',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '• Midterm: 20 pts\n'
+                    '• Quizzes: ${_quizCount} × 5 pts = ${_quizCount * 5} pts\n'
+                    '• Assignments: ${_assignmentCount} × 5 pts = ${_assignmentCount * 5} pts'
+                    '${_courseHasMiniProject ? '\n• Mini Project: 10 pts' : ''}'
+                    '${_courseHasLab ? '\n• Lab: 10 pts' : ''}\n'
+                    '• Final: ${_courseHasLab ? '50' : '60'} pts\n'
+                    '━━━━━━━━━━━━━━━━━\n'
+                    'Total: ${20 + (_quizCount * 5) + (_assignmentCount * 5) + (_courseHasMiniProject ? 10 : 0) + (_courseHasLab ? 10 : 0) + (_courseHasLab ? 50 : 60)} pts',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurface.withOpacity(0.8),
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
         // Assignment and Quiz count controls
         Container(
           decoration: BoxDecoration(
             color: isDark ? colorScheme.surface : Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.accentPurple.withOpacity(0.2)),
+            border: Border.all(color: AppColors.secondaryOrange.withOpacity(0.2)),
           ),
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -663,7 +838,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                               : null,
                           icon: const Icon(Icons.remove, size: 18),
                           constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                          const BoxConstraints(minWidth: 36, minHeight: 36),
                           padding: EdgeInsets.zero,
                           color: AppColors.accentPurple,
                         ),
@@ -685,7 +860,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                               : null,
                           icon: const Icon(Icons.add, size: 18),
                           constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                          const BoxConstraints(minWidth: 36, minHeight: 36),
                           padding: EdgeInsets.zero,
                           color: AppColors.accentPurple,
                         ),
@@ -732,7 +907,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                               : null,
                           icon: const Icon(Icons.remove, size: 18),
                           constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                          const BoxConstraints(minWidth: 36, minHeight: 36),
                           padding: EdgeInsets.zero,
                           color: AppColors.secondaryOrange,
                         ),
@@ -754,7 +929,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                               : null,
                           icon: const Icon(Icons.add, size: 18),
                           constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                          const BoxConstraints(minWidth: 36, minHeight: 36),
                           padding: EdgeInsets.zero,
                           color: AppColors.secondaryOrange,
                         ),
@@ -817,7 +992,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Entering grades for: $_selectedGradeType (Max: ${_getMaxGrade()})',
+                  'Entering grades for: $_selectedGradeType (Max: ${_getMaxGrade()} pts)',
                   style: TextStyle(
                     color: colorScheme.onSurface,
                     fontSize: 13,
@@ -858,18 +1033,18 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
             controller: _searchController,
             decoration: InputDecoration(
               prefixIcon:
-                  Icon(Icons.search_rounded, color: AppColors.primaryBlue),
+              Icon(Icons.search_rounded, color: AppColors.primaryBlue),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear_rounded,
-                          color: colorScheme.onSurface.withOpacity(0.5)),
-                      onPressed: () {
-                        _searchController.clear();
-                        _filterStudents('');
-                      },
-                    )
+                icon: Icon(Icons.clear_rounded,
+                    color: colorScheme.onSurface.withOpacity(0.5)),
+                onPressed: () {
+                  _searchController.clear();
+                  _filterStudents('');
+                },
+              )
                   : null,
-              hintText: 'Search by name or code...',
+              hintText: 'Search by name or ID...',
               hintStyle: TextStyle(
                 color: colorScheme.onSurface.withOpacity(0.4),
                 fontSize: 14,
@@ -885,7 +1060,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                 borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
               ),
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
             onChanged: _filterStudents,
@@ -964,9 +1139,8 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
               final student = _filteredStudents[index];
               final studentId = _getStudentId(student);
               final name = _getStudentName(student);
-              final code = _getStudentCode(student);
               final controller =
-                  _gradeControllers[studentId]?[_selectedGradeType];
+              _gradeControllers[studentId]?[_selectedGradeType];
 
               if (controller == null) return const SizedBox.shrink();
 
@@ -976,7 +1150,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                   color: isDark ? colorScheme.surface : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border:
-                      Border.all(color: AppColors.primaryBlue.withOpacity(0.2)),
+                  Border.all(color: AppColors.primaryBlue.withOpacity(0.2)),
                 ),
                 child: ListTile(
                   leading: Container(
@@ -1003,7 +1177,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    'Code: $code',
+                    'ID: $studentId',
                     style: TextStyle(
                         color: colorScheme.onSurface.withOpacity(0.6)),
                   ),
@@ -1040,13 +1214,18 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
                         ),
                         filled: true,
                         fillColor:
-                            isDark ? colorScheme.surfaceContainerHighest : null,
+                        isDark ? colorScheme.surfaceContainerHighest : null,
                       ),
                       onChanged: (value) {
+                        if (value.isEmpty) return;
                         final grade = double.tryParse(value);
                         if (grade != null &&
                             (grade < 0 || grade > _getMaxGrade())) {
                           controller.text = '';
+                          _showSnackBar(
+                            'Grade must be between 0 and ${_getMaxGrade()}',
+                            isError: true,
+                          );
                         }
                       },
                     ),
@@ -1060,17 +1239,20 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
   }
 
   Widget _buildSubmitButton() {
+    final canSubmit = widget.role == 'faculty';
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _submitGrades,
-        icon: const Icon(Icons.save_rounded),
+        onPressed: canSubmit ? _submitGrades : null,
+        icon: Icon(canSubmit ? Icons.save_rounded : Icons.lock_outline),
         label: Text(
-          'Save Grades (${_filteredStudents.length} students)',
+          canSubmit
+              ? 'Save Grades (${_filteredStudents.length} students)'
+              : 'TAs Cannot Submit Grades',
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accentGreen,
+          backgroundColor: canSubmit ? AppColors.accentGreen : Colors.grey,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -1078,6 +1260,34 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
           ),
           elevation: 0,
         ),
+      ),
+    );
+  }
+
+  Widget _buildTAWarning(ColorScheme colorScheme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryOrange.withOpacity(isDark ? 0.2 : 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.secondaryOrange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              color: AppColors.secondaryOrange, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'As a TA, you can view and prepare grades but cannot save them to the evaluation sheet. Only faculty members can submit final grades.',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurface,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1116,7 +1326,7 @@ class _ManualGradeEntryScreenState extends State<ManualGradeEntryScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'No students are enrolled in this course yet',
+              'No students are enrolled in this ${widget.role == 'faculty' ? 'course' : 'section'} yet',
               style: TextStyle(
                 color: colorScheme.onSurface.withOpacity(0.6),
                 fontSize: 14,

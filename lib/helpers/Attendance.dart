@@ -1,12 +1,10 @@
 class Attendance {
-  final String attendanceId;
   final String studentId;
-  final String instanceId;
+  final String instanceId;     // works for lecture + section
   final DateTime scanTime;
-  final String status;
+  final String status;         // "Present" / "Absent"
 
   Attendance({
-    required this.attendanceId,
     required this.studentId,
     required this.instanceId,
     required this.scanTime,

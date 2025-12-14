@@ -1,3 +1,5 @@
+// student_datasource.dart
+
 import 'package:flutter/foundation.dart';
 import '../../../models/student_model.dart';
 import '../../supabase_service.dart';
@@ -18,11 +20,16 @@ class StudentDataSource {
 
       // Otherwise, get all students
       var query = SupabaseService.client
-          .from('Student')
-          .select('*, User(FullName, Email)');
+          .from('student')
+          .select('*');
 
+      // Apply level filter if specified
       if (level != null && level != 'All Levels') {
-        query = query.eq('AcademicLevel', level);
+        // Extract numeric level from "L1", "L2", etc.
+        final numericLevel = int.tryParse(level.replaceAll('L', ''));
+        if (numericLevel != null) {
+          query = query.eq('academiclevel', numericLevel);
+        }
       }
 
       final response = await query;
@@ -37,84 +44,99 @@ class StudentDataSource {
 
   /// Get students for a specific faculty member or TA
   Future<List<StudentModel>> _getStudentsForFacultyOrTA(
-    String facultyId,
-    String role,
-    String? level,
-  ) async {
+      String facultyId,
+      String role,
+      String? level,
+      ) async {
     try {
       List<StudentModel> students = [];
 
       if (role == 'faculty') {
         // For Faculty: Get students enrolled in their lecture courses
+        // Step 1: Get lecture offerings for this faculty
         final lecturesResponse = await SupabaseService.client
-            .from('LectureCourseOffering')
-            .select('LectureOfferingId')
-            .eq('FacultyId', facultyId)
-            .eq('IsActive', true);
+            .from('lecturecourseoffering')
+            .select('lectureofferingid')
+            .eq('facultysnn', facultyId);
 
         final lectureIds = (lecturesResponse as List)
-            .map((l) => l['LectureOfferingId'])
-            .whereType<dynamic>()
+            .map((l) => l['lectureofferingid'])
+            .whereType<String>()
             .toList();
 
         if (lectureIds.isNotEmpty) {
-          // Get students enrolled in these lectures directly
+          // Step 2: Get students enrolled in these lectures
           final enrollmentsResponse = await SupabaseService.client
-              .from('LectureStudentEnrollment')
-              .select('StudentId, Student(*, User(FullName, Email))')
-              .inFilter('LectureOfferingId', lectureIds)
-              .eq('EnrollmentStatus', 'Enrolled');
+              .from('lectureenrollment')
+              .select('studentid')
+              .inFilter('lectureofferingid', lectureIds);
 
-          final studentSet = <String>{};
-          for (var item in enrollmentsResponse as List) {
-            final studentData = item['Student'];
-            if (studentData != null) {
-              final studentId = studentData['StudentId']?.toString();
-              if (studentId != null && !studentSet.contains(studentId)) {
-                studentSet.add(studentId);
-                students.add(StudentModel.fromJson(studentData));
-              }
-            }
+          final studentIds = (enrollmentsResponse as List)
+              .map((e) => e['studentid'])
+              .whereType<String>()
+              .toSet()
+              .toList();
+
+          if (studentIds.isNotEmpty) {
+            // Step 3: Get student details
+            final studentsResponse = await SupabaseService.client
+                .from('student')
+                .select('*')
+                .inFilter('studentid', studentIds);
+
+            students = (studentsResponse as List)
+                .map((s) => StudentModel.fromJson(s as Map<String, dynamic>))
+                .toList();
           }
         }
       } else if (role == 'teacher_assistant') {
         // For TA: Get students from their assigned sections
+        // Step 1: Get section offerings for this TA
         final sectionsResponse = await SupabaseService.client
-            .from('SectionCourseOffering')
-            .select('SectionOfferingId, LectureOfferingId')
-            .eq('TAId', facultyId)
-            .eq('IsActive', true);
+            .from('sectionta')
+            .select('sectionofferingid')
+            .eq('tasnn', facultyId);
 
-        final lectureIds = (sectionsResponse as List)
-            .map((s) => s['LectureOfferingId'])
-            .whereType<dynamic>()
+        final sectionIds = (sectionsResponse as List)
+            .map((s) => s['sectionofferingid'])
+            .whereType<String>()
             .toList();
 
-        if (lectureIds.isNotEmpty) {
-          // Get students enrolled in the parent lecture courses
+        if (sectionIds.isNotEmpty) {
+          // Step 2: Get students enrolled in these sections
           final enrollmentsResponse = await SupabaseService.client
-              .from('LectureStudentEnrollment')
-              .select('StudentId, Student(*, User(FullName, Email))')
-              .inFilter('LectureOfferingId', lectureIds)
-              .eq('EnrollmentStatus', 'Enrolled');
+              .from('sectionenrollment')
+              .select('studentid')
+              .inFilter('sectionofferingid', sectionIds);
 
-          final studentSet = <String>{};
-          for (var item in enrollmentsResponse as List) {
-            final studentData = item['Student'];
-            if (studentData != null) {
-              final studentId = studentData['StudentId']?.toString();
-              if (studentId != null && !studentSet.contains(studentId)) {
-                studentSet.add(studentId);
-                students.add(StudentModel.fromJson(studentData));
-              }
-            }
+          final studentIds = (enrollmentsResponse as List)
+              .map((e) => e['studentid'])
+              .whereType<String>()
+              .toSet()
+              .toList();
+
+          if (studentIds.isNotEmpty) {
+            // Step 3: Get student details
+            final studentsResponse = await SupabaseService.client
+                .from('student')
+                .select('*')
+                .inFilter('studentid', studentIds);
+
+            students = (studentsResponse as List)
+                .map((s) => StudentModel.fromJson(s as Map<String, dynamic>))
+                .toList();
           }
         }
       }
 
       // Apply level filter if specified
       if (level != null && level != 'All Levels') {
-        students = students.where((s) => s.academicLevel == level).toList();
+        final numericLevel = int.tryParse(level.replaceAll('L', ''));
+        if (numericLevel != null) {
+          students = students
+              .where((s) => s.academicLevel == numericLevel)
+              .toList();
+        }
       }
 
       return students;
@@ -127,9 +149,9 @@ class StudentDataSource {
 
   Future<StudentModel> getStudentById(String id) async {
     final response = await SupabaseService.client
-        .from('Student')
-        .select('*, User(FullName, Email)')
-        .eq('StudentId', id)
+        .from('student')
+        .select('*')
+        .eq('studentid', id)
         .single();
 
     return StudentModel.fromJson(response);
@@ -137,23 +159,23 @@ class StudentDataSource {
 
   Future<List<StudentModel>> searchStudents(String queryText) async {
     try {
-      // Fetch all students with user info
+      // Fetch all students
       final response = await SupabaseService.client
-          .from('Student')
-          .select('*, User(FullName, Email)');
+          .from('student')
+          .select('*');
 
       final allStudents = (response as List<dynamic>)
           .map((e) => StudentModel.fromJson(e as Map<String, dynamic>))
           .toList();
 
-      // Filter by student ID, code, or name
+      // Filter by student ID, email, or name
       return allStudents.where((student) {
         final query = queryText.toLowerCase();
         final id = student.studentId.toLowerCase();
-        final code = student.studentCode.toLowerCase();
-        final name = (student.fullName ?? '').toLowerCase();
+        final email = student.email.toLowerCase();
+        final name = student.fullName.toLowerCase();
         return id.contains(query) ||
-            code.contains(query) ||
+            email.contains(query) ||
             name.contains(query);
       }).toList();
     } catch (e) {

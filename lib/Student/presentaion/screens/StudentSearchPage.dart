@@ -107,11 +107,11 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                         opacity: value,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: const Color(0xFFDFE6ED),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryBlue.withOpacity(0.1),
+                                color: const Color(0xFFDFE6ED).withOpacity(0.6),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -121,7 +121,10 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                             controller: _controller,
                             style: theme.textTheme.bodyLarge,
                             decoration: InputDecoration(
-                              hintText: "Search courses by name...",
+                              hintText: "Search by course name or code...",
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade600,
+                              ),
                               prefixIcon: Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -150,7 +153,7 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                 borderSide: BorderSide.none,
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: const Color(0xFFDFE6ED),
                               contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 18),
                             ),
@@ -209,12 +212,11 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                             height: 200,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: const Color(0xFFDFE6ED),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color:
-                                  AppColors.primaryBlue.withOpacity(0.1),
+                                  color: const Color(0xFFDFE6ED).withOpacity(0.6),
                                   blurRadius: 15,
                                   offset: const Offset(0, 5),
                                 ),
@@ -229,13 +231,10 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
                                         gradient: AppColors.secondaryGradient,
-                                        borderRadius:
-                                        BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
-                                      child: const Icon(
-                                          Icons.bar_chart_rounded,
-                                          color: Colors.white,
-                                          size: 20),
+                                      child: const Icon(Icons.bar_chart_rounded,
+                                          color: Colors.white, size: 20),
                                     ),
                                     const SizedBox(width: 12),
                                     Text(
@@ -243,6 +242,7 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                       style:
                                       theme.textTheme.titleLarge?.copyWith(
                                         fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF2C3E50),
                                       ),
                                     ),
                                   ],
@@ -252,17 +252,18 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                   child: BarChart(
                                     BarChartData(
                                       alignment: BarChartAlignment.spaceAround,
-                                      maxY: gradeDistribution.values
+                                      maxY: gradeDistribution.values.isEmpty
+                                          ? 5
+                                          : (gradeDistribution.values
                                           .reduce((a, b) => a > b ? a : b)
                                           .toDouble() +
-                                          2,
+                                          2),
                                       barTouchData: BarTouchData(
                                         enabled: true,
-                                        touchTooltipData: BarTouchTooltipData(
-                                          tooltipBgColor:
-                                          AppColors.primaryBlue,
-                                          tooltipRoundedRadius: 8,
-                                        ),
+                                        // touchTooltipData: BarTouchTooltipData(
+                                        //   getTooltipColor: (group) => AppColors.primaryBlue,
+                                        //   tooltipRoundedRadius: 8,
+                                        // ),
                                       ),
                                       titlesData: FlTitlesData(
                                         show: true,
@@ -270,23 +271,18 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                           sideTitles: SideTitles(
                                             showTitles: true,
                                             getTitlesWidget: (value, meta) {
-                                              final grades = gradeDistribution
-                                                  .keys
-                                                  .toList();
-                                              if (value.toInt() <
-                                                  grades.length) {
+                                              final grades =
+                                              gradeDistribution.keys.toList();
+                                              if (value.toInt() < grades.length) {
                                                 return Padding(
-                                                  padding:
-                                                  const EdgeInsets.only(
+                                                  padding: const EdgeInsets.only(
                                                       top: 8),
                                                   child: Text(
                                                     grades[value.toInt()],
-                                                    style: TextStyle(
-                                                      color:
-                                                      AppColors.primaryBlue,
+                                                    style: const TextStyle(
+                                                      color: AppColors.primaryBlue,
                                                       fontSize: 12,
-                                                      fontWeight:
-                                                      FontWeight.w600,
+                                                      fontWeight: FontWeight.w600,
                                                     ),
                                                   ),
                                                 );
@@ -295,20 +291,17 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                             },
                                           ),
                                         ),
-                                        leftTitles: AxisTitles(
-                                          sideTitles:
-                                          SideTitles(showTitles: false),
+                                        leftTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
                                         ),
-                                        topTitles: AxisTitles(
-                                          sideTitles:
-                                          SideTitles(showTitles: false),
+                                        topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
                                         ),
-                                        rightTitles: AxisTitles(
-                                          sideTitles:
-                                          SideTitles(showTitles: false),
+                                        rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
                                         ),
                                       ),
-                                      gridData: FlGridData(show: false),
+                                      gridData: const FlGridData(show: false),
                                       borderData: FlBorderData(show: false),
                                       barGroups: gradeDistribution.entries
                                           .map((entry) {
@@ -320,8 +313,7 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                           barRods: [
                                             BarChartRodData(
                                               toY: entry.value.toDouble(),
-                                              gradient:
-                                              AppColors.primaryGradient,
+                                              gradient: AppColors.primaryGradient,
                                               width: 24,
                                               borderRadius:
                                               const BorderRadius.vertical(
@@ -360,8 +352,7 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                               AdvancedSlidePageRoute(
                                                 page: CourseDetailsPage(
                                                     course: course),
-                                                direction:
-                                                SlideDirection.right,
+                                                direction: SlideDirection.right,
                                               ),
                                             );
                                           },
@@ -370,18 +361,18 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                                 bottom: 16),
                                             padding: const EdgeInsets.all(20),
                                             decoration: BoxDecoration(
-                                              color: Colors.white,
+                                              color: const Color(0xFFDFE6ED),
                                               borderRadius:
                                               BorderRadius.circular(20),
                                               border: Border.all(
                                                 color: AppColors.primaryBlue
-                                                    .withOpacity(0.1),
+                                                    .withOpacity(0.2),
                                                 width: 1.5,
                                               ),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: AppColors.primaryBlue
-                                                      .withOpacity(0.1),
+                                                  color: const Color(0xFFDFE6ED)
+                                                      .withOpacity(0.6),
                                                   blurRadius: 15,
                                                   offset: const Offset(0, 5),
                                                 ),
@@ -393,16 +384,15 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                                   width: 60,
                                                   height: 60,
                                                   decoration: BoxDecoration(
-                                                    gradient: AppColors
-                                                        .primaryGradient,
+                                                    gradient:
+                                                    AppColors.primaryGradient,
                                                     borderRadius:
-                                                    BorderRadius.circular(
-                                                        16),
+                                                    BorderRadius.circular(16),
                                                   ),
                                                   child: Center(
                                                     child: Text(
-                                                      course.title.isNotEmpty
-                                                          ? course.title[0]
+                                                      course.courseCode.isNotEmpty
+                                                          ? course.courseCode[0]
                                                           .toUpperCase()
                                                           : '?',
                                                       style: const TextStyle(
@@ -418,20 +408,35 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                    CrossAxisAlignment
-                                                        .start,
+                                                    CrossAxisAlignment.start,
                                                     children: [
                                                       Text(
-                                                        course.title,
-                                                        style: theme
-                                                            .textTheme
-                                                            .titleMedium
+                                                        course.courseCode,
+                                                        style: theme.textTheme
+                                                            .titleSmall
                                                             ?.copyWith(
                                                           fontWeight:
                                                           FontWeight.w700,
+                                                          color: AppColors
+                                                              .primaryBlue,
                                                         ),
                                                       ),
-                                                      const SizedBox(height: 4),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        course.courseName,
+                                                        style: theme.textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                          fontWeight:
+                                                          FontWeight.w600,
+                                                          color: const Color(
+                                                              0xFF2C3E50),
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 6),
                                                       Row(
                                                         children: [
                                                           Icon(
@@ -441,47 +446,78 @@ class _CourseSearchPageState extends State<CourseSearchPage> {
                                                             color: AppColors
                                                                 .secondaryOrange,
                                                           ),
-                                                          const SizedBox(
-                                                              width: 4),
+                                                          const SizedBox(width: 4),
                                                           Text(
                                                             '${course.semester} • ${course.academicYear}',
-                                                            style: theme
-                                                                .textTheme
+                                                            style: theme.textTheme
                                                                 .bodySmall
                                                                 ?.copyWith(
-                                                              color: colorScheme
-                                                                  .onSurface
-                                                                  .withOpacity(
-                                                                  0.6),
+                                                              color: Colors
+                                                                  .grey.shade700,
                                                             ),
                                                           ),
+                                                          if (course.hasLab) ...[
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            Container(
+                                                              padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 2,
+                                                              ),
+                                                              decoration:
+                                                              BoxDecoration(
+                                                                color: AppColors
+                                                                    .accentGreen
+                                                                    .withOpacity(
+                                                                    0.2),
+                                                                borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                    4),
+                                                              ),
+                                                              child: Text(
+                                                                'Lab',
+                                                                style: TextStyle(
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                                  color: AppColors
+                                                                      .accentGreen,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ],
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-                                                Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
-                                                  decoration: BoxDecoration(
-                                                    gradient: AppColors
-                                                        .secondaryGradient,
-                                                    borderRadius:
-                                                    BorderRadius.circular(
-                                                        12),
-                                                  ),
-                                                  child: Text(
-                                                    course.letterGrade ?? "-",
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                      FontWeight.bold,
-                                                      fontSize: 16,
+                                                if (course.letterGrade != null)
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 8),
+                                                    decoration: BoxDecoration(
+                                                      gradient: AppColors
+                                                          .secondaryGradient,
+                                                      borderRadius:
+                                                      BorderRadius.circular(
+                                                          12),
+                                                    ),
+                                                    child: Text(
+                                                      course.letterGrade!,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                        FontWeight.bold,
+                                                        fontSize: 16,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
                                               ],
                                             ),
                                           ),

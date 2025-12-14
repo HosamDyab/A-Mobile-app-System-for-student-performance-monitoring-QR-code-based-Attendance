@@ -10,14 +10,17 @@ import '../widgets/custom_app_bar.dart';
 ///
 /// Features:
 /// - Search by name or email
+/// - Filter by department or course
 /// - Modern card design for TA entries
 /// - Theme-aware styling (light/dark mode)
 class TeacherAssistantListScreen extends StatefulWidget {
-  final String? facultyId;
+  final String? departmentCode;
+  final String? courseCode;
 
   const TeacherAssistantListScreen({
     super.key,
-    this.facultyId,
+    this.departmentCode,
+    this.courseCode,
   });
 
   @override
@@ -39,13 +42,23 @@ class _TeacherAssistantListScreenState
   }
 
   void _loadTeacherAssistants() {
-    if (widget.facultyId != null) {
+    if (widget.courseCode != null) {
       context
           .read<TeacherAssistantCubit>()
-          .loadTeacherAssistantsByFaculty(widget.facultyId!);
+          .loadTeacherAssistantsByCourse(widget.courseCode!);
+    } else if (widget.departmentCode != null) {
+      context
+          .read<TeacherAssistantCubit>()
+          .loadTeacherAssistantsByDepartment(widget.departmentCode!);
     } else {
       context.read<TeacherAssistantCubit>().loadAllTeacherAssistants();
     }
+  }
+
+  String get _title {
+    if (widget.courseCode != null) return 'Course T.As';
+    if (widget.departmentCode != null) return 'Department T.As';
+    return 'Teacher Assistants';
   }
 
   @override
@@ -55,10 +68,7 @@ class _TeacherAssistantListScreenState
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: CustomAppBar(
-        title:
-            widget.facultyId != null ? 'Assigned T.As' : 'Teacher Assistants',
-      ),
+      appBar: CustomAppBar(title: _title),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -126,7 +136,7 @@ class _TeacherAssistantListScreenState
             borderSide: BorderSide(color: AppColors.primaryBlue, width: 2),
           ),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
         style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
         onChanged: (value) {
@@ -161,7 +171,7 @@ class _TeacherAssistantListScreenState
   }
 
   Widget _buildTACard(dynamic ta, ColorScheme colorScheme, bool isDark) {
-    final initials = (ta.fullName ?? 'TA')
+    final initials = ta.fullName
         .split(' ')
         .map((n) => n.isNotEmpty ? n[0] : '')
         .take(2)
@@ -227,36 +237,34 @@ class _TeacherAssistantListScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        ta.fullName ?? 'Unknown',
+                        ta.fullName,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: colorScheme.onSurface,
                           fontSize: 15,
                         ),
                       ),
-                      if (ta.email != null) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.email_rounded,
-                              size: 14,
-                              color: colorScheme.onSurface.withOpacity(0.5),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                ta.email!,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: colorScheme.onSurface.withOpacity(0.6),
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.email_rounded,
+                            size: 14,
+                            color: colorScheme.onSurface.withOpacity(0.5),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              ta.email,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.onSurface.withOpacity(0.6),
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -284,7 +292,7 @@ class _TeacherAssistantListScreenState
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color:
-                        AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                    AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -453,7 +461,7 @@ class _TeacherAssistantListScreenState
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                ta.fullName ?? 'Teacher Assistant',
+                ta.fullName,
                 style: TextStyle(
                   color: colorScheme.onSurface,
                   fontSize: 18,
@@ -467,16 +475,14 @@ class _TeacherAssistantListScreenState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ta.email != null) ...[
-              _buildDetailRow(
-                'Email',
-                ta.email!,
-                Icons.email_rounded,
-                colorScheme,
-                isDark,
-              ),
-              const SizedBox(height: 12),
-            ],
+            _buildDetailRow(
+              'Email',
+              ta.email,
+              Icons.email_rounded,
+              colorScheme,
+              isDark,
+            ),
+            const SizedBox(height: 12),
             _buildDetailRow(
               'TA ID',
               ta.taId,
@@ -484,14 +490,16 @@ class _TeacherAssistantListScreenState
               colorScheme,
               isDark,
             ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-              'User ID',
-              ta.userId,
-              Icons.person_outline_rounded,
-              colorScheme,
-              isDark,
-            ),
+            if (ta.depCode != null) ...[
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Department',
+                ta.depCode!,
+                Icons.business_rounded,
+                colorScheme,
+                isDark,
+              ),
+            ],
           ],
         ),
         actions: [
@@ -511,12 +519,12 @@ class _TeacherAssistantListScreenState
   }
 
   Widget _buildDetailRow(
-    String label,
-    String value,
-    IconData icon,
-    ColorScheme colorScheme,
-    bool isDark,
-  ) {
+      String label,
+      String value,
+      IconData icon,
+      ColorScheme colorScheme,
+      bool isDark,
+      ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

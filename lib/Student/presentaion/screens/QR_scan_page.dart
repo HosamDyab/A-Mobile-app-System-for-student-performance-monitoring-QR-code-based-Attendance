@@ -115,7 +115,7 @@ class _ScanQRScreenState extends State<ScanQRScreen>
       final cubit = context.read<AttendanceCubit>();
       await cubit.markAttendance(widget.studentId, code);
 
-      if (mounted) Navigator.of(context).pop();
+     // if (mounted) Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

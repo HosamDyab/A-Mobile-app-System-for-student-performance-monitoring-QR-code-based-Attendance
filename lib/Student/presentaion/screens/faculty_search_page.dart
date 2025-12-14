@@ -25,7 +25,6 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
   void initState() {
     super.initState();
     _controller.addListener(_onSearchChanged);
-    // جلب كل الأساتذة فور فتح الصفحة
     context.read<StudentSearchCubit>().loadAllFaculty();
   }
 
@@ -73,7 +72,9 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
             const SizedBox(width: 12),
             Text(
               "My Faculty",
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -96,11 +97,11 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                         opacity: value,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: const Color(0xFFDFE6ED),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryBlue.withOpacity(0.1),
+                                color: const Color(0xFFDFE6ED).withOpacity(0.6),
                                 blurRadius: 15,
                                 offset: const Offset(0, 5),
                               ),
@@ -108,8 +109,12 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                           ),
                           child: TextField(
                             controller: _controller,
+                            style: theme.textTheme.bodyLarge,
                             decoration: InputDecoration(
-                              hintText: "Search faculty by name...",
+                              hintText: "Search faculty by name or email...",
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade600,
+                              ),
                               prefixIcon: Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -127,7 +132,9 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                 icon: const Icon(Icons.clear),
                                 onPressed: () {
                                   _controller.clear();
-                                  context.read<StudentSearchCubit>().filterFaculty('');
+                                  context
+                                      .read<StudentSearchCubit>()
+                                      .filterFaculty('');
                                 },
                               )
                                   : null,
@@ -136,8 +143,9 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                 borderSide: BorderSide.none,
                               ),
                               filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                              fillColor: const Color(0xFFDFE6ED),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 18),
                             ),
                           ),
                         ),
@@ -152,7 +160,8 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                     builder: (context, state) {
                       if (state.isLoadingFaculty && state.faculty.isEmpty) {
                         return const Center(
-                          child: LoadingAnimation(color: AppColors.primaryBlue, size: 60),
+                          child: LoadingAnimation(
+                              color: AppColors.primaryBlue, size: 60),
                         );
                       }
 
@@ -162,7 +171,9 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.person_off_rounded,
-                                  size: 80, color: colorScheme.onSurface.withOpacity(0.3)),
+                                  size: 80,
+                                  color:
+                                  colorScheme.onSurface.withOpacity(0.3)),
                               const SizedBox(height: 24),
                               Text(
                                 _controller.text.isEmpty
@@ -184,7 +195,8 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                           final faculty = state.faculty[index];
                           return TweenAnimationBuilder<double>(
                             tween: Tween(begin: 0.0, end: 1.0),
-                            duration: Duration(milliseconds: 350 + (index * 70)),
+                            duration:
+                            Duration(milliseconds: 350 + (index * 70)),
                             builder: (context, value, child) {
                               return Transform.translate(
                                 offset: Offset(0, 30 * (1 - value)),
@@ -195,7 +207,8 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                       Navigator.push(
                                         context,
                                         AdvancedSlidePageRoute(
-                                          page: FacultyDetailsPage(faculty: faculty),
+                                          page: FacultyDetailsPage(
+                                              faculty: faculty),
                                           direction: SlideDirection.right,
                                         ),
                                       );
@@ -204,15 +217,17 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                       margin: const EdgeInsets.only(bottom: 16),
                                       padding: const EdgeInsets.all(20),
                                       decoration: BoxDecoration(
-                                        color: Colors.white,
+                                        color: const Color(0xFFDFE6ED),
                                         borderRadius: BorderRadius.circular(20),
                                         border: Border.all(
-                                          color: AppColors.primaryBlue.withOpacity(0.1),
+                                          color: AppColors.primaryBlue
+                                              .withOpacity(0.2),
                                           width: 1.5,
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppColors.primaryBlue.withOpacity(0.1),
+                                            color: const Color(0xFFDFE6ED)
+                                                .withOpacity(0.6),
                                             blurRadius: 15,
                                             offset: const Offset(0, 5),
                                           ),
@@ -224,13 +239,16 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                             width: 60,
                                             height: 60,
                                             decoration: BoxDecoration(
-                                              gradient: AppColors.secondaryGradient,
-                                              borderRadius: BorderRadius.circular(16),
+                                              gradient:
+                                              AppColors.secondaryGradient,
+                                              borderRadius:
+                                              BorderRadius.circular(16),
                                             ),
                                             child: Center(
                                               child: Text(
                                                 faculty.fullName.isNotEmpty
-                                                    ? faculty.fullName[0].toUpperCase()
+                                                    ? faculty.fullName[0]
+                                                    .toUpperCase()
                                                     : "?",
                                                 style: const TextStyle(
                                                   color: Colors.white,
@@ -243,26 +261,62 @@ class _FacultySearchPageState extends State<FacultySearchPage> {
                                           const SizedBox(width: 16),
                                           Expanded(
                                             child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    faculty.fullName,
-                                                    style: theme.textTheme.titleMedium?.copyWith(
-                                                      fontWeight: FontWeight.w700,
-                                                    ),
+                                              crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  faculty.fullName,
+                                                  style: theme
+                                                      .textTheme.titleMedium
+                                                      ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(0xFF2C3E50),
                                                   ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  faculty.email,
+                                                  style: theme
+                                                      .textTheme.bodySmall
+                                                      ?.copyWith(
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                                if (faculty.depCode != null) ...[
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                    faculty.email,
-                                                    style: theme.textTheme.bodySmall?.copyWith(
-                                                      color: colorScheme.onSurface.withOpacity(0.7),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors
+                                                          .primaryBlue
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                      BorderRadius.circular(
+                                                          4),
+                                                    ),
+                                                    child: Text(
+                                                      faculty.depCode!,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                        FontWeight.w600,
+                                                        color: AppColors
+                                                            .primaryBlue,
+                                                      ),
                                                     ),
                                                   ),
-                                                ]),
-
+                                                ],
+                                              ],
+                                            ),
                                           ),
                                           Icon(Icons.arrow_forward_ios_rounded,
-                                              size: 18, color: AppColors.primaryBlue.withOpacity(0.6)),
+                                              size: 18,
+                                              color: AppColors.primaryBlue
+                                                  .withOpacity(0.6)),
                                         ],
                                       ),
                                     ),

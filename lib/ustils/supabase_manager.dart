@@ -5,9 +5,8 @@ class SupabaseManager {
 
   static Future<void> init() async {
     await Supabase.initialize(
-      url: 'https://duewvafpukziltqqwtjc.supabase.co',
-      anonKey:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1ZXd2YWZwdWt6aWx0cXF3dGpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxMDYyMjcsImV4cCI6MjA3NTY4MjIyN30.SP8Zt2MEc8Ts1WWHHU0Ksudejcs9GtUyBduGILCN3zg',
+      url: 'https://nsovrjjfimaqlpnmhpun.supabase.co',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb3ZyampmaW1hcWxwbm1ocHVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyOTQxNzcsImV4cCI6MjA4MDg3MDE3N30.Hczv1ZOiMwWWfitzG8b6TxAxku-OP0VaTUdngcAAhTA',
     );
   }
 }

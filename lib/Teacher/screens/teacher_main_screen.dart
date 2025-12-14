@@ -55,37 +55,31 @@ class _TeacherMainScreenState extends State<TeacherMainScreen> {
     );
   }
 
-  /// Builds the current screen based on selected index
-  Widget _buildCurrentScreen(BuildContext context) {
+   Widget _buildCurrentScreen(BuildContext context) {
     switch (_currentIndex) {
       case 0:
-        // Dashboard - shows today's lectures/sections
-        return TeacherDashboardScreen(
+         return TeacherDashboardScreen(
           facultyName: widget.facultyName,
           facultyId: widget.facultyId,
           role: widget.role,
         );
       case 1:
-        // Manual Attendance - works for both Faculty and TA
-        return ManualAttendanceScreen(
+         return ManualAttendanceScreen(
           facultyId: widget.facultyId,
           role: widget.role,
         );
       case 2:
-        // Grade Entry - works for both Faculty and TA
-        return ManualGradeEntryScreen(
+         return ManualGradeEntryScreen(
           facultyId: widget.facultyId,
           role: widget.role,
         );
       case 3:
-        // Students List - BLoCs are available from MultiBlocProvider via Builder
-        return StudentsListScreen(
+         return StudentsListScreen(
           facultyId: widget.facultyId,
           role: widget.role,
         );
       case 4:
-        // Profile - BLoCs are available from MultiBlocProvider via Builder
-        return TeacherProfileScreen(
+         return TeacherProfileScreen(
           facultyName: widget.facultyName,
           facultyEmail: widget.facultyEmail,
           role: widget.role,

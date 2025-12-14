@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import 'Student/data/repo_imp/StudentRepositoryImpl.dart';
 import 'Student/data/repo_imp/attendance_repository_impl.dart';
@@ -12,6 +13,7 @@ import 'Student/presentaion/blocs/gpa cubit.dart';
 import 'Student/presentaion/blocs/profile_cubit/profile_cubit.dart';
 
 // Teacher imports
+import 'Student/presentaion/screens/StudentView.dart';
 import 'Teacher/viewmodels/live_attendance/live_attendance_cubit.dart';
 import 'Teacher/services/repositories/live_attendance_repository_impl.dart';
 import 'Teacher/services/datasources/live_attendance_remote_source.dart';
@@ -135,7 +137,35 @@ class ClassTrackApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppThemeDark.dark(),
       themeMode: themeManager.themeMode,
-      home: const AuthWrapper(),
+      home: const  AuthWrapper()
+
+      //AuthWrapper(),
     );
   }
 }
+
+
+//
+// class QRGeneratorScreen extends StatelessWidget {
+//   const QRGeneratorScreen({super.key});
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     const String qrData = "LCO-CS413-G2-W6-THU-S27";
+//
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text("QR Code Generator"),
+//       ),
+//       body: Center(
+//         child: QrImageView(
+//           data: qrData,
+//           version: QrVersions.auto,
+//           size: 250.0,
+//           gapless: false,
+//           backgroundColor: Colors.white,
+//         ),
+//       ),
+//     );
+//   }
+// }

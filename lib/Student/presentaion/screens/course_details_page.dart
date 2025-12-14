@@ -40,7 +40,7 @@ class CourseDetailsPage extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                course.title,
+                course.courseCode,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -70,14 +70,7 @@ class CourseDetailsPage extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white,
-                                AppColors.primaryBlue.withOpacity(0.1),
-                              ],
-                            ),
+                            color: const Color(0xFFDFE6ED),
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(
                               color: AppColors.primaryBlue.withOpacity(0.2),
@@ -85,54 +78,74 @@ class CourseDetailsPage extends StatelessWidget {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryBlue.withOpacity(0.15),
+                                color: const Color(0xFFDFE6ED).withOpacity(0.6),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                                 spreadRadius: 2,
                               ),
                             ],
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primaryBlue
-                                          .withOpacity(0.3),
-                                      blurRadius: 12,
-                                      spreadRadius: 2,
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.primaryGradient,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primaryBlue
+                                              .withOpacity(0.3),
+                                          blurRadius: 12,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: CircleAvatar(
-                                  radius: 32,
-                                  backgroundColor: Colors.white,
-                                  child: Text(
-                                    course.title.isNotEmpty
-                                        ? course.title[0].toUpperCase()
-                                        : "?",
-                                    style: TextStyle(
-                                      color: AppColors.primaryBlue,
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.w700,
+                                    child: CircleAvatar(
+                                      radius: 32,
+                                      backgroundColor: Colors.white,
+                                      child: Text(
+                                        course.courseCode.isNotEmpty
+                                            ? course.courseCode[0].toUpperCase()
+                                            : "?",
+                                        style: const TextStyle(
+                                          color: AppColors.primaryBlue,
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: Text(
-                                  course.title,
-                                  style:
-                                      theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.tertiaryBlack,
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          course.courseCode,
+                                          style: theme.textTheme.titleLarge
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.primaryBlue,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          course.courseName,
+                                          style: theme.textTheme.bodyLarge
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF2C3E50),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
@@ -146,7 +159,7 @@ class CourseDetailsPage extends StatelessWidget {
                   "Course Information",
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppColors.tertiaryBlack,
+                    color: const Color(0xFF2C3E50),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -168,24 +181,55 @@ class CourseDetailsPage extends StatelessWidget {
                 const SizedBox(height: 12),
                 _buildInfoCard(
                   context: context,
-                  icon: Icons.grade_rounded,
-                  label: "Letter Grade",
-                  value: course.letterGrade ?? "-",
-                  color: AppColors.accentGreen,
-                  highlight: true,
+                  icon: Icons.menu_book_rounded,
+                  label: "Credit Hours",
+                  value: '${course.creditHours} Credits',
+                  color: AppColors.accentPurple,
                 ),
                 const SizedBox(height: 12),
                 _buildInfoCard(
                   context: context,
-                  icon: Icons.assessment_rounded,
-                  label: "Total Grade",
-                  value: course.totalGrade?.toStringAsFixed(2) ?? "-",
-                  color: AppColors.accentPurple,
-                  highlight: true,
+                  icon: Icons.science_rounded,
+                  label: "Laboratory",
+                  value: course.hasLab ? "Yes" : "No",
+                  color: course.hasLab ? AppColors.accentGreen : Colors.grey,
                 ),
+                if (course.letterGrade != null || course.totalGrade != null) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    "Grade Information",
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF2C3E50),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                if (course.letterGrade != null)
+                  _buildInfoCard(
+                    context: context,
+                    icon: Icons.grade_rounded,
+                    label: "Letter Grade",
+                    value: course.letterGrade!,
+                    color: AppColors.accentGreen,
+                    highlight: true,
+                  ),
+                if (course.letterGrade != null && course.totalGrade != null)
+                  const SizedBox(height: 12),
+                if (course.totalGrade != null)
+                  _buildInfoCard(
+                    context: context,
+                    icon: Icons.assessment_rounded,
+                    label: "Total Grade",
+                    value: course.totalGrade!.toStringAsFixed(2),
+                    color: AppColors.accentPurple,
+                    highlight: true,
+                  ),
                 const SizedBox(height: 32),
                 HoverScaleWidget(
-                  onTap: () {},
+                  onTap: () {
+                    // TODO: Navigate to course materials
+                  },
                   child: Container(
                     width: double.infinity,
                     height: 60,
@@ -221,7 +265,9 @@ class CourseDetailsPage extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        // TODO: Navigate to course materials
+                      },
                     ),
                   ),
                 ),
@@ -256,22 +302,15 @@ class CourseDetailsPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white,
-                    color.withOpacity(0.05),
-                  ],
-                ),
+                color: const Color(0xFFDFE6ED),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: color.withOpacity(0.2),
+                  color: color.withOpacity(0.3),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.1),
+                    color: color.withOpacity(0.15),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                     spreadRadius: 1,
@@ -308,7 +347,7 @@ class CourseDetailsPage extends StatelessWidget {
                         Text(
                           label,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.tertiaryLightGray,
+                            color: Colors.grey.shade600,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -317,8 +356,10 @@ class CourseDetailsPage extends StatelessWidget {
                           value,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight:
-                                highlight ? FontWeight.w700 : FontWeight.w600,
-                            color: highlight ? color : AppColors.tertiaryBlack,
+                            highlight ? FontWeight.w700 : FontWeight.w600,
+                            color: highlight
+                                ? color
+                                : const Color(0xFF2C3E50),
                           ),
                         ),
                       ],

@@ -39,7 +39,6 @@ class _StudentViewState extends State<StudentView> {
     _loadStudentData();
   }
 
-  /// Loads student data from AuthService and initializes pages
   Future<void> _loadStudentData() async {
     try {
       final loginData = await AuthService.getLoginData();
@@ -84,6 +83,8 @@ class _StudentViewState extends State<StudentView> {
       }
     }
   }
+
+
 
   /// Handles navigation tab changes
   void _onNavTapped(int index) {

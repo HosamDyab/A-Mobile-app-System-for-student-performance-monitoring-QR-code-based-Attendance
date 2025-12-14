@@ -17,10 +17,22 @@ class TeacherAssistantCubit extends Cubit<TeacherAssistantState> {
     }
   }
 
-  Future<void> loadTeacherAssistantsByFaculty(String facultyId) async {
+  /// Load TAs by department code
+  Future<void> loadTeacherAssistantsByDepartment(String depCode) async {
     emit(TeacherAssistantLoading());
     try {
-      final tas = await _dataSource.getTeacherAssistantsByFaculty(facultyId);
+      final tas = await _dataSource.getTeacherAssistantsByDepartment(depCode);
+      emit(TeacherAssistantLoaded(tas));
+    } catch (e) {
+      emit(TeacherAssistantError(e.toString()));
+    }
+  }
+
+  /// Load TAs by course code
+  Future<void> loadTeacherAssistantsByCourse(String courseCode) async {
+    emit(TeacherAssistantLoading());
+    try {
+      final tas = await _dataSource.getTeacherAssistantsByCourse(courseCode);
       emit(TeacherAssistantLoaded(tas));
     } catch (e) {
       emit(TeacherAssistantError(e.toString()));
@@ -32,7 +44,7 @@ class TeacherAssistantCubit extends Cubit<TeacherAssistantState> {
       loadAllTeacherAssistants();
       return;
     }
-    
+
     emit(TeacherAssistantLoading());
     try {
       final tas = await _dataSource.searchTeacherAssistants(query);
@@ -42,4 +54,3 @@ class TeacherAssistantCubit extends Cubit<TeacherAssistantState> {
     }
   }
 }
-

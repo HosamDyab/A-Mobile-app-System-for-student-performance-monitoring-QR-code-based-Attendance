@@ -1,183 +1,224 @@
+// Replace your current dashboard__buildCoursesList.dart with this
+
 import 'package:flutter/material.dart';
 import '../../../shared/utils/app_colors.dart';
-import '../../../shared/widgets/hover_scale_widget.dart';
 
 class CoursesList extends StatelessWidget {
-  final List courses;
+  final List<Map<String, dynamic>> courses;
 
-  const CoursesList({super.key, required this.courses});
+  const CoursesList({
+    super.key,
+    required this.courses,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    print('\n📚 CoursesList Widget - Building with ${courses.length} courses');
 
-    return ListView.separated(
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+    if (courses.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.school_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No courses found',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: courses.length,
       itemBuilder: (context, index) {
-        final item = courses[index];
-        final courseOffering = item["SectionCourseOffering"];
-        final courseName =
-            courseOffering?["Course"]?["Title"] ?? "Unknown Course";
+        final course = courses[index];
 
-        final sectionGrades =
-            courseOffering?["SectionGrade"] as List<dynamic>? ?? [];
-        final firstGrade = sectionGrades.isNotEmpty ? sectionGrades[0] : null;
+        print('\n--- Building CourseCard $index ---');
+        print('Full course data: $course');
 
-        final grade = firstGrade?["LetterGrade"] ?? "-";
-        final total = firstGrade?["Total"]?.toString() ?? "-";
+        // Extract data with null safety - CORRECTED PATH
+        final lectureCourseOffering = course['lecturecourseoffering'] as Map<String, dynamic>?;
+        print('lecturecourseoffering: $lectureCourseOffering');
 
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: 400 + (index * 100)),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 20 * (1 - value)),
-              child: Opacity(
-                opacity: value,
-                child: HoverScaleWidget(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white,
-                          AppColors.primaryBlue.withOpacity(0.03),
+        final courseData = lectureCourseOffering?['course'] as Map<String, dynamic>?;
+        print('course data: $courseData');
+
+        final courseName = courseData?['coursename']?.toString() ?? 'Unknown Course';
+        final courseCode = courseData?['coursecode']?.toString() ?? 'N/A';
+        final credits = courseData?['credithours'] as int? ?? 0;
+        final semester = lectureCourseOffering?['semester']?.toString() ?? 'N/A';
+        final year = lectureCourseOffering?['academicyear']?.toString() ?? 'N/A';
+        final hasLabValue = courseData?['haslab']?.toString().toUpperCase();
+        final hasLab = hasLabValue == 'YES';
+
+        print('📝 Extracted values:');
+        print('  Code: $courseCode');
+        print('  Name: $courseName');
+        print('  Credits: $credits');
+        print('  Semester: $semester');
+        print('  Year: $year');
+        print('  Has Lab: $hasLab');
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDFE6ED),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFDFE6ED).withOpacity(0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                print('🔔 Tapped on course: $courseCode - $courseName');
+                // TODO: Navigate to course details page
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Course Icon
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.book_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Course Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Course Code
+                          Text(
+                            courseCode,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+
+                          // Course Name
+                          Text(
+                            courseName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF2C3E50),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Semester & Credits Info
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today_rounded,
+                                size: 14,
+                                color: AppColors.primaryBlue.withOpacity(0.7),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$semester $year',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF34495E),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(
+                                Icons.school_rounded,
+                                size: 14,
+                                color: AppColors.primaryBlue.withOpacity(0.7),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$credits Credits',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF34495E),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppColors.primaryBlue.withOpacity(0.1),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withOpacity(0.1),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                          spreadRadius: 1,
+                    ),
+
+                    // Lab Badge & Arrow
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (hasLab)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryOrange.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppColors.secondaryOrange,
+                                width: 1,
+                              ),
+                            ),
+                            child: const Text(
+                              'Lab',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondaryOrange,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.primaryBlue.withOpacity(0.5),
+                          size: 24,
                         ),
                       ],
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                      leading: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.menu_book_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      title: Text(
-                        courseName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.tertiaryBlack,
-                        ),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondaryOrange.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.grade_rounded,
-                                    size: 14,
-                                    color: AppColors.secondaryOrange,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    grade,
-                                    style: TextStyle(
-                                      color: AppColors.secondaryOrange,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryBlue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.assessment_rounded,
-                                    size: 14,
-                                    color: AppColors.primaryBlue,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    "Score: $total",
-                                    style: TextStyle(
-                                      color: AppColors.primaryBlue,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 16,
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
